@@ -171,3 +171,94 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Open an issue for bugs or feature requests
 - Check discussions for common questions
 - Review wiki for implementation guides
+
+## Features
+
+### Azure DevOps Integration
+
+- Work Item Management
+  - Create, update, and query work items
+  - Add/remove tags
+  - Manage work item attachments
+  - Add comments and track discussions
+  - Create work items from templates
+  - Manage work item relationships
+- Wiki Management
+  - Create and update wiki pages
+  - Search wiki content
+  - Retrieve page content and subpages
+- Sprint Management
+  - Query current and upcoming sprints
+  - Track sprint progress
+
+### GitHub Integration
+
+- Pull Request Management
+  - List open/closed pull requests
+  - Get detailed PR information
+- Code Search
+  - Search across repositories
+  - Filter by path, language, and repository
+
+### Slack Integration
+
+- Message Formatting
+  - Format messages using Block Kit
+  - Support for headers, sections, and context blocks
+- Message Search
+  - Search message history
+  - Filter by channel and user
+- Message Posting
+  - Post messages to channels
+  - Support for threaded replies
+  - Rich message formatting with blocks
+
+### N8N Integration
+
+- Workflow Management
+  - List workflows
+  - Create new workflows
+  - Toggle workflow activation
+  - Monitor workflow executions
+- Workflow Templates
+  - Format workflow configurations
+  - Support for various node types
+  - Automated connection setup
+
+### Memory Management
+
+- Vector Storage (Qdrant)
+  - Semantic search capabilities
+  - Document storage with metadata
+  - Similarity search with configurable thresholds
+- Graph Database (Neo4j)
+  - Store relationships between memories
+  - Query using Cypher
+  - Track temporal relationships
+
+### AI Integration
+
+- Claude Integration
+  - Direct chat capabilities
+  - Memory-augmented conversations
+  - Context-aware responses
+- OpenAI Integration
+  - GPT-4 integration
+  - Memory retrieval and formatting
+  - Structured output generation
+
+### Cross-Integration Features
+
+- Status Report Generation
+  - Combine data from multiple sources
+  - Sprint status reports
+  - Work item summaries
+  - PR status integration
+- Work Item Reminders
+  - Slack notifications
+  - Customizable messages
+  - Automated tracking
+- Standup Report Generation
+  - Team-based reporting
+  - State-grouped work items
+  - Rich Slack formatting
