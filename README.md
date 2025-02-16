@@ -76,7 +76,13 @@ export DEFAULT_SLACK_CHANNEL="some-slack-channel-id"
         "AZURE_DEVOPS_PROJECT": "project",
         "SLACK_DEFAULT_CHANNEL": "channel_id",
         "SLACK_BOT_TOKEN": "bot_token",
-        "GITHUB_PAT": "personal_access_token"
+        "GITHUB_PAT": "personal_access_token",
+        "OPENAI_API_KEY": "openaikey",
+        "QDRANT_URL": "http://localhost:6333",
+        "QDRANT_API_KEY": "yourkey",
+        "NEO4J_URL": "yourneo4jinstance",
+        "NEO4J_USER": "neo4j",
+        "NEO4J_PASSWORD": "neo4jpassword"
       }
     }
   }

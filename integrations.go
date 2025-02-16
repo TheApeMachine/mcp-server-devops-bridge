@@ -29,6 +29,12 @@ type IntegrationsConfig struct {
 	SlackToken  string
 	N8NBaseURL  string // Base URL of your N8N instance
 	N8NAPIKey   string // API key for authentication
+	OpenAIToken string
+	QdrantURL   string
+	QdrantAPIKey string
+	Neo4jURL     string
+	Neo4jUser    string
+	Neo4jPassword string
 }
 
 // Initialize integration clients

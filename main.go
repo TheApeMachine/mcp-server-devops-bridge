@@ -46,6 +46,12 @@ func main() {
 		SlackToken:  os.Getenv("SLACK_BOT_TOKEN"),
 		N8NBaseURL:  os.Getenv("N8N_BASE_URL"),
 		N8NAPIKey:   os.Getenv("N8N_API_KEY"),
+		OpenAIToken:  os.Getenv("OPENAI_API_KEY"),
+		QdrantURL:    os.Getenv("QDRANT_URL"),
+		QdrantAPIKey: os.Getenv("QDRANT_API_KEY"),
+		Neo4jURL:     os.Getenv("NEO4J_URL"),
+		Neo4jUser:    os.Getenv("NEO4J_USER"),
+		Neo4jPassword: os.Getenv("NEO4J_PASSWORD"),
 	}
 
 	// Validate configuration
