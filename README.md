@@ -67,7 +67,7 @@ export DEFAULT_SLACK_CHANNEL="some-slack-channel-id"
         "wcgw_mcp"
       ]
     },
-    "azure-devops": {
+    "devops-bridge": {
       "command": "/full/path/to/mcp-server-devops-bridge/mcp-server-devops-bridge",
       "args": []
     }
