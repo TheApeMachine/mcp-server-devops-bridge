@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -471,4 +473,385 @@ func handleFormatWorkItemDescription(ctx context.Context, request mcp.GetPromptR
 			),
 		},
 	), nil
+}
+
+// Handler for getting detailed work item information
+func handleGetWorkItemDetails(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	idsStr := request.Params.Arguments["ids"].(string)
+	idStrs := strings.Split(idsStr, ",")
+
+	var ids []int
+	for _, idStr := range idStrs {
+		id, err := strconv.Atoi(strings.TrimSpace(idStr))
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Invalid ID format: %s", idStr)), nil
+		}
+		ids = append(ids, id)
+	}
+
+	workItems, err := workItemClient.GetWorkItems(ctx, workitemtracking.GetWorkItemsArgs{
+		Ids:     &ids,
+		Project: &config.Project,
+		Expand:  &workitemtracking.WorkItemExpandValues.All,
+	})
+
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get work items: %v", err)), nil
+	}
+
+	var results []string
+	for _, item := range *workItems {
+		fields := *item.Fields
+		title, _ := fields["System.Title"].(string)
+		description, _ := fields["System.Description"].(string)
+		state, _ := fields["System.State"].(string)
+
+		result := fmt.Sprintf("ID: %d\nTitle: %s\nState: %s\nDescription: %s\n---\n",
+			*item.Id, title, state, description)
+		results = append(results, result)
+	}
+
+	return mcp.NewToolResultText(strings.Join(results, "\n")), nil
+}
+
+// Handler for managing work item relationships
+func handleManageWorkItemRelations(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	sourceID := int(request.Params.Arguments["source_id"].(float64))
+	targetID := int(request.Params.Arguments["target_id"].(float64))
+	relationType, ok := request.Params.Arguments["relation_type"].(string)
+	if !ok {
+		return mcp.NewToolResultError("Invalid relation_type"), nil
+	}
+	operation := request.Params.Arguments["operation"].(string)
+
+	// Map relation types to Azure DevOps relation types
+	relationTypeMap := map[string]string{
+		"parent":  "System.LinkTypes.Hierarchy-Reverse",
+		"child":   "System.LinkTypes.Hierarchy-Forward",
+		"related": "System.LinkTypes.Related",
+	}
+
+	azureRelationType := relationTypeMap[relationType]
+
+	var ops []webapi.JsonPatchOperation
+	if operation == "add" {
+		ops = []webapi.JsonPatchOperation{
+			{
+				Op:   &webapi.OperationValues.Add,
+				Path: stringPtr("/relations/-"),
+				Value: map[string]interface{}{
+					"rel": azureRelationType,
+					"url": fmt.Sprintf("%s/_apis/wit/workItems/%d", config.OrganizationURL, targetID),
+					"attributes": map[string]interface{}{
+						"comment": "Added via MCP",
+					},
+				},
+			},
+		}
+	} else {
+		// For remove, we need to first get the work item to find the relation index
+		workItem, err := workItemClient.GetWorkItem(ctx, workitemtracking.GetWorkItemArgs{
+			Id:      &sourceID,
+			Project: &config.Project,
+		})
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to get work item: %v", err)), nil
+		}
+
+		if workItem.Relations == nil {
+			return mcp.NewToolResultError("Work item has no relations"), nil
+		}
+
+		for i, relation := range *workItem.Relations {
+			if *relation.Rel == azureRelationType {
+				targetUrl := fmt.Sprintf("%s/_apis/wit/workItems/%d", config.OrganizationURL, targetID)
+				if *relation.Url == targetUrl {
+					ops = []webapi.JsonPatchOperation{
+						{
+							Op:   &webapi.OperationValues.Remove,
+							Path: stringPtr(fmt.Sprintf("/relations/%d", i)),
+						},
+					}
+					break
+				}
+			}
+		}
+
+		if len(ops) == 0 {
+			return mcp.NewToolResultError("Specified relation not found"), nil
+		}
+	}
+
+	updateArgs := workitemtracking.UpdateWorkItemArgs{
+		Id:       &sourceID,
+		Project:  &config.Project,
+		Document: &ops,
+	}
+
+	_, err := workItemClient.UpdateWorkItem(ctx, updateArgs)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to update work item relations: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(fmt.Sprintf("Successfully %sd %s relationship", operation, relationType)), nil
+}
+
+// Handler for getting related work items
+func handleGetRelatedWorkItems(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	id := int(request.Params.Arguments["id"].(float64))
+	relationType := request.Params.Arguments["relation_type"].(string)
+
+	workItem, err := workItemClient.GetWorkItem(ctx, workitemtracking.GetWorkItemArgs{
+		Id:      &id,
+		Project: &config.Project,
+		Expand:  &workitemtracking.WorkItemExpandValues.Relations,
+	})
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get work item: %v", err)), nil
+	}
+
+	if workItem.Relations == nil {
+		return mcp.NewToolResultText("No related items found"), nil
+	}
+
+	relationTypeMap := map[string]string{
+		"parent":   "System.LinkTypes.Hierarchy-Reverse",
+		"children": "System.LinkTypes.Hierarchy-Forward",
+		"related":  "System.LinkTypes.Related",
+	}
+
+	// Debug information
+	var debugInfo []string
+	debugInfo = append(debugInfo, fmt.Sprintf("Looking for relation type: %s (mapped to: %s)",
+		relationType, relationTypeMap[relationType]))
+
+	var relatedIds []int
+	for _, relation := range *workItem.Relations {
+		debugInfo = append(debugInfo, fmt.Sprintf("Found relation of type: %s", *relation.Rel))
+
+		if relationType == "all" || *relation.Rel == relationTypeMap[relationType] {
+			parts := strings.Split(*relation.Url, "/")
+			if relatedID, err := strconv.Atoi(parts[len(parts)-1]); err == nil {
+				relatedIds = append(relatedIds, relatedID)
+			}
+		}
+	}
+
+	if len(relatedIds) == 0 {
+		return mcp.NewToolResultText(fmt.Sprintf("Debug info:\n%s\n\nNo matching related items found",
+			strings.Join(debugInfo, "\n"))), nil
+	}
+
+	// Get details of related items
+	relatedItems, err := workItemClient.GetWorkItems(ctx, workitemtracking.GetWorkItemsArgs{
+		Ids:     &relatedIds,
+		Project: &config.Project,
+	})
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get related items: %v", err)), nil
+	}
+
+	var results []string
+	for _, item := range *relatedItems {
+		fields := *item.Fields
+		title, _ := fields["System.Title"].(string)
+		result := fmt.Sprintf("ID: %d, Title: %s", *item.Id, title)
+		results = append(results, result)
+	}
+
+	return mcp.NewToolResultText(strings.Join(results, "\n")), nil
+}
+
+// Handler for adding a comment to a work item
+func handleAddWorkItemComment(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	id := int(request.Params.Arguments["id"].(float64))
+	text := request.Params.Arguments["text"].(string)
+
+	// Add comment as a discussion by updating the Discussion field
+	updateArgs := workitemtracking.UpdateWorkItemArgs{
+		Id:      &id,
+		Project: &config.Project,
+		Document: &[]webapi.JsonPatchOperation{
+			{
+				Op:    &webapi.OperationValues.Add,
+				Path:  stringPtr("/fields/System.History"),
+				Value: text,
+			},
+		},
+	}
+
+	workItem, err := workItemClient.UpdateWorkItem(ctx, updateArgs)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to add comment: %v", err)), nil
+	}
+
+	return mcp.NewToolResultText(fmt.Sprintf("Added comment to work item #%d", *workItem.Id)), nil
+}
+
+// Handler for getting work item comments
+func handleGetWorkItemComments(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	id := int(request.Params.Arguments["id"].(float64))
+
+	comments, err := workItemClient.GetComments(ctx, workitemtracking.GetCommentsArgs{
+		Project:    &config.Project,
+		WorkItemId: &id,
+	})
+
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get comments: %v", err)), nil
+	}
+
+	var results []string
+	for _, comment := range *comments.Comments {
+		results = append(results, fmt.Sprintf("Comment by %s at %s:\n%s\n---",
+			*comment.CreatedBy.DisplayName,
+			comment.CreatedDate.String(),
+			*comment.Text))
+	}
+
+	return mcp.NewToolResultText(strings.Join(results, "\n")), nil
+}
+
+// Handler for getting work item fields
+func handleGetWorkItemFields(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	id := int(request.Params.Arguments["work_item_id"].(float64))
+
+	// Get the work item's details
+	workItem, err := workItemClient.GetWorkItem(ctx, workitemtracking.GetWorkItemArgs{
+		Id:      &id,
+		Project: &config.Project,
+	})
+
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to get work item details: %v", err)), nil
+	}
+
+	// Extract and format field information
+	var results []string
+	fieldName, hasFieldFilter := request.Params.Arguments["field_name"].(string)
+
+	for fieldRef, value := range *workItem.Fields {
+		if hasFieldFilter && !strings.Contains(strings.ToLower(fieldRef), strings.ToLower(fieldName)) {
+			continue
+		}
+
+		results = append(results, fmt.Sprintf("Field: %s\nValue: %v\nType: %T\n---",
+			fieldRef,
+			value,
+			value))
+	}
+
+	if len(results) == 0 {
+		if hasFieldFilter {
+			return mcp.NewToolResultText(fmt.Sprintf("No fields found matching: %s", fieldName)), nil
+		}
+		return mcp.NewToolResultText("No fields found"), nil
+	}
+
+	return mcp.NewToolResultText(strings.Join(results, "\n")), nil
+}
+
+// Handler for batch creating work items
+func handleBatchCreateWorkItems(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	itemsJSON := request.Params.Arguments["items"].(string)
+	var items []struct {
+		Type        string `json:"type"`
+		Title       string `json:"title"`
+		Description string `json:"description"`
+		Priority    string `json:"priority,omitempty"`
+	}
+
+	if err := json.Unmarshal([]byte(itemsJSON), &items); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid JSON format: %v", err)), nil
+	}
+
+	var results []string
+	for _, item := range items {
+		createArgs := workitemtracking.CreateWorkItemArgs{
+			Type:    &item.Type,
+			Project: &config.Project,
+			Document: &[]webapi.JsonPatchOperation{
+				{
+					Op:    &webapi.OperationValues.Add,
+					Path:  stringPtr("/fields/System.Title"),
+					Value: item.Title,
+				},
+				{
+					Op:    &webapi.OperationValues.Add,
+					Path:  stringPtr("/fields/System.Description"),
+					Value: item.Description,
+				},
+			},
+		}
+
+		if item.Priority != "" {
+			doc := append(*createArgs.Document, webapi.JsonPatchOperation{
+				Op:    &webapi.OperationValues.Add,
+				Path:  stringPtr("/fields/Microsoft.VSTS.Common.Priority"),
+				Value: item.Priority,
+			})
+			createArgs.Document = &doc
+		}
+
+		workItem, err := workItemClient.CreateWorkItem(ctx, createArgs)
+		if err != nil {
+			results = append(results, fmt.Sprintf("Failed to create '%s': %v", item.Title, err))
+			continue
+		}
+		results = append(results, fmt.Sprintf("Created work item #%d: %s", *workItem.Id, item.Title))
+	}
+
+	return mcp.NewToolResultText(strings.Join(results, "\n")), nil
+}
+
+// Handler for batch updating work items
+func handleBatchUpdateWorkItems(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	updatesJSON := request.Params.Arguments["updates"].(string)
+	var updates []struct {
+		ID    int    `json:"id"`
+		Field string `json:"field"`
+		Value string `json:"value"`
+	}
+
+	if err := json.Unmarshal([]byte(updatesJSON), &updates); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid JSON format: %v", err)), nil
+	}
+
+	// Map field names to their System.* equivalents
+	fieldMap := map[string]string{
+		"Title":       "System.Title",
+		"Description": "System.Description",
+		"State":       "System.State",
+		"Priority":    "Microsoft.VSTS.Common.Priority",
+	}
+
+	var results []string
+	for _, update := range updates {
+		systemField, ok := fieldMap[update.Field]
+		if !ok {
+			results = append(results, fmt.Sprintf("Invalid field for #%d: %s", update.ID, update.Field))
+			continue
+		}
+
+		updateArgs := workitemtracking.UpdateWorkItemArgs{
+			Id:      &update.ID,
+			Project: &config.Project,
+			Document: &[]webapi.JsonPatchOperation{
+				{
+					Op:    &webapi.OperationValues.Replace,
+					Path:  stringPtr("/fields/" + systemField),
+					Value: update.Value,
+				},
+			},
+		}
+
+		workItem, err := workItemClient.UpdateWorkItem(ctx, updateArgs)
+		if err != nil {
+			results = append(results, fmt.Sprintf("Failed to update #%d: %v", update.ID, err))
+			continue
+		}
+		results = append(results, fmt.Sprintf("Updated work item #%d", *workItem.Id))
+	}
+
+	return mcp.NewToolResultText(strings.Join(results, "\n")), nil
 }
