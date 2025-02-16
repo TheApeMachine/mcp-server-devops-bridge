@@ -56,7 +56,7 @@ func main() {
 
 	// Validate configuration
 	if config.OrganizationURL == "" || config.PersonalAccessToken == "" || config.Project == "" {
-		log.Fatal("Missing required environment variables: AZURE_DEVOPS_ORG_URL, AZURE_DEVOPS_PAT, AZURE_DEVOPS_PROJECT")
+		log.Fatal("Missing required environment variables: AZURE_DEVOPS_ORG, AZDO_PAT, AZURE_DEVOPS_PROJECT")
 	}
 
 	// Initialize Azure DevOps clients

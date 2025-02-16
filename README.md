@@ -69,7 +69,15 @@ export DEFAULT_SLACK_CHANNEL="some-slack-channel-id"
     },
     "devops-bridge": {
       "command": "/full/path/to/mcp-server-devops-bridge/mcp-server-devops-bridge",
-      "args": []
+      "args": [],
+      "env": {
+        "AZURE_DEVOPS_ORG": "organization",
+        "AZDO_PAT": "personal_access_token",
+        "AZURE_DEVOPS_PROJECT": "project",
+        "SLACK_DEFAULT_CHANNEL": "channel_id",
+        "SLACK_BOT_TOKEN": "bot_token",
+        "GITHUB_PAT": "personal_access_token"
+      }
     }
   }
 }
