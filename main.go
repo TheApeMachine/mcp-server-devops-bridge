@@ -42,15 +42,15 @@ func main() {
 	}
 
 	intConfig = IntegrationsConfig{
-		GithubToken: os.Getenv("GITHUB_PAT"),
-		SlackToken:  os.Getenv("SLACK_BOT_TOKEN"),
-		N8NBaseURL:  os.Getenv("N8N_BASE_URL"),
-		N8NAPIKey:   os.Getenv("N8N_API_KEY"),
-		OpenAIToken:  os.Getenv("OPENAI_API_KEY"),
-		QdrantURL:    os.Getenv("QDRANT_URL"),
-		QdrantAPIKey: os.Getenv("QDRANT_API_KEY"),
-		Neo4jURL:     os.Getenv("NEO4J_URL"),
-		Neo4jUser:    os.Getenv("NEO4J_USER"),
+		GithubToken:   os.Getenv("GITHUB_PAT"),
+		SlackToken:    os.Getenv("SLACK_BOT_TOKEN"),
+		N8NBaseURL:    os.Getenv("N8N_BASE_URL"),
+		N8NAPIKey:     os.Getenv("N8N_API_KEY"),
+		OpenAIToken:   os.Getenv("OPENAI_API_KEY"),
+		QdrantURL:     os.Getenv("QDRANT_URL"),
+		QdrantAPIKey:  os.Getenv("QDRANT_API_KEY"),
+		Neo4jURL:      os.Getenv("NEO4J_URL"),
+		Neo4jUser:     os.Getenv("NEO4J_USER"),
 		Neo4jPassword: os.Getenv("NEO4J_PASSWORD"),
 	}
 
@@ -99,6 +99,12 @@ func main() {
 
 	// Add Memory tools
 	addMemoryTools(s)
+
+	// Add Email tools
+	addEmailTools(s)
+
+	// Add Browser tools
+	addBrowserTools(s)
 
 	// Start the server
 	if err := server.ServeStdio(s); err != nil {
@@ -179,6 +185,10 @@ func addClaudeTools(s *server.MCPServer) {
 	})
 }
 
+var messages = []openai.ChatCompletionMessageParamUnion{
+	openai.SystemMessage("You are a helpful assistant that can discuss topics with the user. Please make sure that besides providing just answers, you also keep the discussion going by asking follow-up questions."),
+}
+
 func addOpenAITools(s *server.MCPServer) {
 	openAITool := mcp.NewTool("discuss_with_gpt4",
 		mcp.WithDescription("Discuss a topic with GPT-4 to get additional perspectives"),
@@ -190,18 +200,19 @@ func addOpenAITools(s *server.MCPServer) {
 
 	s.AddTool(openAITool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		message := request.Params.Arguments["message"].(string)
+		messages = append(messages, openai.UserMessage(message))
 
 		llm := openai.NewClient()
 		chat, err := llm.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
-			Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
-				openai.SystemMessage("You are a helpful assistant that can discuss topics with the user."),
-				openai.UserMessage(message),
-			}),
-			Model: openai.F(openai.ChatModelGPT4o),
+			Messages: openai.F(messages),
+			Model:    openai.F(openai.ChatModelGPT4o),
 		})
+
 		if err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to get GPT-4 response: %v", err)), nil
 		}
+
+		messages = append(messages, openai.AssistantMessage(chat.Choices[0].Message.Content))
 
 		return mcp.NewToolResultText(chat.Choices[0].Message.Content), nil
 	})
@@ -239,4 +250,36 @@ func addMemoryTools(s *server.MCPServer) {
 		),
 	)
 	s.AddTool(queryMemoryTool, handleQueryMemory)
+}
+
+func addEmailTools(s *server.MCPServer) {
+	// Get Inbox Tool
+	getInboxTool := mcp.NewTool("get_inbox",
+		mcp.WithDescription("Retrieve emails from Outlook inbox"),
+	)
+	s.AddTool(getInboxTool, handleGetInbox)
+
+	// Search Emails Tool
+	searchEmailsTool := mcp.NewTool("search_emails",
+		mcp.WithDescription("Search through emails using a query string"),
+		mcp.WithString("query",
+			mcp.Required(),
+			mcp.Description("Search query to find specific emails"),
+		),
+	)
+	s.AddTool(searchEmailsTool, handleSearchEmails)
+
+	// Reply to Email Tool
+	replyToEmailTool := mcp.NewTool("reply_to_email",
+		mcp.WithDescription("Send a reply to a specific email"),
+		mcp.WithString("message_id",
+			mcp.Required(),
+			mcp.Description("ID of the message to reply to"),
+		),
+		mcp.WithString("reply_message",
+			mcp.Required(),
+			mcp.Description("Message content for the reply"),
+		),
+	)
+	s.AddTool(replyToEmailTool, handleReplyToEmail)
 }
