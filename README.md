@@ -268,3 +268,44 @@ This project is licensed under the MIT License - see the LICENSE file for detail
   - Team-based reporting
   - State-grouped work items
   - Rich Slack formatting
+
+In some cases you will not have access to the environment, so create a `start.sh` and make it executable, so you can wrap the environment.
+
+```bash
+#!/bin/bash
+
+# Azure DevOps Configuration
+export AZURE_DEVOPS_ORG="YOUR ORG"
+export AZDO_PAT="YOUR PAT"
+export AZURE_DEVOPS_PROJECT="YOUR PROJECT"
+
+# GitHub Configuration
+export GITHUB_PAT="YOUR PAT"
+
+# Slack Configuration
+export SLACK_BOT_TOKEN="YOUR TOKEN"
+export DEFAULT_SLACK_CHANNEL="YOUR CHANNEL ID"
+
+# N8N Configuration
+export N8N_BASE_URL="http://localhost:5678"
+export N8N_API_KEY="YOUR API KEY"
+
+# OpenAI Configuration
+export OPENAI_API_KEY="YOUR API KEY"
+
+# Qdrant Configuration
+export QDRANT_URL="http://localhost:6333"
+export QDRANT_API_KEY="your-qdrant-api-key"
+
+# Neo4j Configuration
+export NEO4J_URL="http://localhost:7474"
+export NEO4J_USER="neo4j"
+export NEO4J_PASSWORD="your-neo4j-password"
+
+# Email Configuration (if using email features)
+export EMAIL_INBOX_WEBHOOK_URL="YOUR WEBHOOK URL"
+export EMAIL_SEARCH_WEBHOOK_URL="YOUR WEBHOOK URL"
+export EMAIL_REPLY_WEBHOOK_URL="YOUR WEBHOOK URL"
+
+/path/to/mcp-server-devops-bridge/mcp-server-devops-bridge
+```
