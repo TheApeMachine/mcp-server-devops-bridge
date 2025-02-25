@@ -106,6 +106,9 @@ func main() {
 	// Add Browser tools
 	addBrowserTools(s)
 
+	// Add Code Analysis tools
+	addCodeAnalysisTools(s)
+
 	// Start the server
 	if err := server.ServeStdio(s); err != nil {
 		log.Fatalf("Server error: %v\n", err)
@@ -250,6 +253,81 @@ func addMemoryTools(s *server.MCPServer) {
 		),
 	)
 	s.AddTool(queryMemoryTool, handleQueryMemory)
+}
+
+func addCodeAnalysisTools(s *server.MCPServer) {
+	// Initialize code analyzer
+	analyzer, err := NewCodeAnalyzer()
+	if err != nil {
+		log.Printf("Warning: Failed to initialize code analyzer: %v", err)
+		return
+	}
+
+	// Analyze Code Tool
+	analyzeCodeTool := mcp.NewTool("analyze_code",
+		mcp.WithDescription("Analyze code for complexity, potential bugs, and security issues"),
+		mcp.WithString("path",
+			mcp.Required(),
+			mcp.Description("Path to the code file to analyze"),
+		),
+	)
+
+	s.AddTool(analyzeCodeTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		path := request.Params.Arguments["path"].(string)
+
+		analysis, err := analyzer.AnalyzeCode(ctx, path)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to analyze code: %v", err)), nil
+		}
+
+		// Format results
+		result := fmt.Sprintf("Code Analysis Results for %s:\n\n", path)
+		result += fmt.Sprintf("Complexity Score: %.2f\n", analysis.Complexity)
+		result += fmt.Sprintf("Bug Probability: %.2f%%\n", analysis.BugProbability*100)
+
+		if len(analysis.Security) > 0 {
+			result += "\nSecurity Issues:\n"
+			for issue, description := range analysis.Security {
+				result += fmt.Sprintf("- %s: %s\n", issue, description)
+			}
+		} else {
+			result += "\nNo security issues found."
+		}
+
+		return mcp.NewToolResultText(result), nil
+	})
+
+	// Store Code Context Tool
+	storeContextTool := mcp.NewTool("store_code_context",
+		mcp.WithDescription("Store code context information for future reference"),
+		mcp.WithString("path",
+			mcp.Required(),
+			mcp.Description("Path to the code file"),
+		),
+		mcp.WithString("language",
+			mcp.Required(),
+			mcp.Description("Programming language of the code"),
+		),
+		mcp.WithString("framework",
+			mcp.Description("Framework used, if any"),
+		),
+	)
+
+	s.AddTool(storeContextTool, handleStoreCodeContext)
+
+	// Query Similar Code Tool
+	querySimilarTool := mcp.NewTool("query_similar_code",
+		mcp.WithDescription("Find similar code based on context and relationships"),
+		mcp.WithString("path",
+			mcp.Required(),
+			mcp.Description("Path to the code file to find similar contexts for"),
+		),
+		mcp.WithNumber("limit",
+			mcp.Description("Maximum number of similar contexts to return"),
+		),
+	)
+
+	s.AddTool(querySimilarTool, handleQuerySimilarCode)
 }
 
 func addEmailTools(s *server.MCPServer) {
