@@ -264,8 +264,8 @@ func addOpenAITools(s *server.MCPServer) {
 			request.Params.Arguments["id"].(string),
 			request.Params.Arguments["system_prompt"].(string),
 			request.Params.Arguments["task"].(string),
-			request.Params.Arguments["paths"].(string),
-			request.Params.Arguments["tools"].(string),
+			getOptionalStringArg(request.Params.Arguments, "paths", ""),
+			getOptionalStringArg(request.Params.Arguments, "tools", ""),
 			cmds,
 		)
 
@@ -451,8 +451,8 @@ func addAgentManagementTools(s *server.MCPServer) {
 		agentID := request.Params.Arguments["id"].(string)
 		systemPrompt := request.Params.Arguments["system_prompt"].(string)
 		initialTask := request.Params.Arguments["initial_task"].(string)
-		paths, _ := request.Params.Arguments["paths"].(string)
-		tools, _ := request.Params.Arguments["tools"].(string)
+		paths := getOptionalStringArg(request.Params.Arguments, "paths", "")
+		tools := getOptionalStringArg(request.Params.Arguments, "tools", "")
 
 		// Check if agent already exists
 		agentsMutex.RLock()
@@ -690,4 +690,11 @@ func addAgentManagementTools(s *server.MCPServer) {
 
 		return mcp.NewToolResultText("Message sent successfully to topic: " + topic), nil
 	})
+}
+
+func getOptionalStringArg(args map[string]interface{}, key string, defaultValue string) string {
+	if val, ok := args[key]; ok {
+		return val.(string)
+	}
+	return defaultValue
 }

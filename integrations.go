@@ -25,15 +25,15 @@ var (
 
 // Configuration for integrations
 type IntegrationsConfig struct {
-	GithubToken string
-	SlackToken  string
-	N8NBaseURL  string // Base URL of your N8N instance
-	N8NAPIKey   string // API key for authentication
-	OpenAIToken string
-	QdrantURL   string
-	QdrantAPIKey string
-	Neo4jURL     string
-	Neo4jUser    string
+	GithubToken   string
+	SlackToken    string
+	N8NBaseURL    string // Base URL of your N8N instance
+	N8NAPIKey     string // API key for authentication
+	OpenAIToken   string
+	QdrantURL     string
+	QdrantAPIKey  string
+	Neo4jURL      string
+	Neo4jUser     string
 	Neo4jPassword string
 }
 
@@ -67,9 +67,6 @@ func addIntegrationTools(s *server.MCPServer) {
 
 	// Slack Tools
 	addSlackTools(s)
-
-	// N8N Tools
-	addN8NTools(s)
 
 	// Cross-cutting Tools
 	addCrossCuttingTools(s)
