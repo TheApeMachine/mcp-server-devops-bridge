@@ -46,57 +46,78 @@ func MemoryMiddleware(
 			RecentQueries: make(map[string]time.Time),
 		}
 
-		// Extract context from the request
+		// Extract rich context from the request
 		requestContext := extractContext(request)
 		memCtx.RequestContext = requestContext
 
-		// Search for relevant memories
+		// Search for relevant memories with context-aware filtering
 		var memories []string
+		var relevantMemories bool
 
-		// 1. Search vector store
+		// 1. Search vector store with semantic similarity
 		if vectorStore != nil {
 			vectorResults, err := vectorStore.Search(ctx, requestContext)
 			if err == nil && len(vectorResults) > 0 {
-				memories = append(memories, fmt.Sprintf("From vector store: %s", strings.Join(vectorResults, "; ")))
+				// Filter and rank memories by relevance
+				filteredResults := filterRelevantMemories(vectorResults, requestContext)
+				if len(filteredResults) > 0 {
+					memories = append(memories, fmt.Sprintf("Relevant context: %s", strings.Join(filteredResults, "; ")))
+					relevantMemories = true
+				}
 			}
 		}
 
-		// 2. Search graph store
+		// 2. Search graph store with relationship context
 		if graphStore != nil {
-			graphResults, err := graphStore.Query(ctx, extractKeywords(requestContext), "")
+			keywords := extractKeywords(requestContext)
+			graphResults, err := graphStore.Query(ctx, keywords, buildGraphQuery(request))
 			if err == nil && len(graphResults) > 0 {
-				memories = append(memories, fmt.Sprintf("From graph store: %s", strings.Join(graphResults, "; ")))
+				// Enhance results with relationship context
+				enhancedResults := enhanceWithRelationships(graphResults)
+				if len(enhancedResults) > 0 {
+					memories = append(memories, fmt.Sprintf("Related context: %s", strings.Join(enhancedResults, "; ")))
+					relevantMemories = true
+				}
 			}
 		}
 
-		// Inject memories into the request context if found
-		if len(memories) > 0 {
+		// Create context with memory metadata
+		ctxWithMeta := context.WithValue(ctx, "memory_context", memCtx)
+
+		// Inject memories into the request context if relevant ones found
+		if relevantMemories {
 			memCtx.MemoryInjected = true
-
-			// Create a new context with memories added
-			ctxWithMemories := context.WithValue(ctx, "memories", memories)
-
-			// Process the request with the enhanced context
-			result, err := handler(ctxWithMemories, request)
-
-			// After processing, store the result as a new memory
-			if err == nil && result != nil {
-				storeResult(ctx, vectorStore, graphStore, requestContext, result)
-			}
-
-			return result, err
+			ctxWithMeta = context.WithValue(ctxWithMeta, "memories", memories)
 		}
 
-		// No memories found, just pass through
-		result, err := handler(ctx, request)
+		// Process the request with the enhanced context
+		result, err := handler(ctxWithMeta, request)
 
-		// Still store the result
+		// Store the result with enhanced context if successful
 		if err == nil && result != nil {
 			storeResult(ctx, vectorStore, graphStore, requestContext, result)
 		}
 
 		return result, err
 	}
+}
+
+// filterRelevantMemories filters and ranks memories by relevance to the current context
+func filterRelevantMemories(memories []string, context string) []string {
+	// TODO: Implement semantic similarity ranking
+	return memories
+}
+
+// enhanceWithRelationships adds relationship context to graph results
+func enhanceWithRelationships(results []string) []string {
+	// TODO: Implement relationship enhancement
+	return results
+}
+
+// buildGraphQuery constructs a context-aware graph query
+func buildGraphQuery(request mcp.CallToolRequest) string {
+	// TODO: Implement dynamic query building
+	return ""
 }
 
 // extractContext gathers queryable context from the request

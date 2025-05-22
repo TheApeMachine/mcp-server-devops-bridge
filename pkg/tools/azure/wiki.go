@@ -41,7 +41,16 @@ func (tool *WikiTool) Handle() mcp.Tool {
 }
 
 func (tool *WikiTool) Handler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	switch request.Params.Arguments["operation"].(string) {
+	var (
+		op string
+		ok bool
+	)
+
+	if op, ok = request.Params.Arguments["operation"].(string); !ok {
+		return mcp.NewToolResultError("Missing operation parameter"), nil
+	}
+
+	switch op {
 	case "manage_wiki_page":
 		return tool.handleManageWikiPage(ctx, request)
 	case "get_wiki_page":
@@ -56,10 +65,19 @@ func (tool *WikiTool) Handler(ctx context.Context, request mcp.CallToolRequest) 
 }
 
 func (tool *WikiTool) handleManageWikiPage(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	path := request.Params.Arguments["path"].(string)
-	content := request.Params.Arguments["content"].(string)
-	// Note: Comments are not supported by the Azure DevOps Wiki API
-	_, _ = request.Params.Arguments["comment"].(string)
+	var (
+		path    string
+		content string
+		ok      bool
+	)
+
+	if path, ok = request.Params.Arguments["path"].(string); !ok {
+		return mcp.NewToolResultError("Missing path parameter"), nil
+	}
+
+	if content, ok = request.Params.Arguments["content"].(string); !ok {
+		return mcp.NewToolResultError("Missing content parameter"), nil
+	}
 
 	// Get wiki identifier
 	wikiIdentifier := fmt.Sprintf("%s.wiki", tool.config.Project)
@@ -81,8 +99,19 @@ func (tool *WikiTool) handleManageWikiPage(ctx context.Context, request mcp.Call
 }
 
 func (tool *WikiTool) handleGetWikiPage(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	path := request.Params.Arguments["path"].(string)
-	includeChildren, _ := request.Params.Arguments["include_children"].(bool)
+	var (
+		path            string
+		includeChildren bool
+		ok              bool
+	)
+
+	if path, ok = request.Params.Arguments["path"].(string); !ok {
+		return mcp.NewToolResultError("Missing path parameter"), nil
+	}
+
+	if includeChildren, ok = request.Params.Arguments["include_children"].(bool); !ok {
+		return mcp.NewToolResultError("Missing include_children parameter"), nil
+	}
 
 	recursionLevel := "none"
 	if includeChildren {
@@ -156,8 +185,19 @@ func (tool *WikiTool) handleGetWikiPage(ctx context.Context, request mcp.CallToo
 }
 
 func (tool *WikiTool) handleListWikiPages(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	path, _ := request.Params.Arguments["path"].(string)
-	recursive, _ := request.Params.Arguments["recursive"].(bool)
+	var (
+		path      string
+		recursive bool
+		ok        bool
+	)
+
+	if path, ok = request.Params.Arguments["path"].(string); !ok {
+		return mcp.NewToolResultError("Missing path parameter"), nil
+	}
+
+	if recursive, ok = request.Params.Arguments["recursive"].(bool); !ok {
+		return mcp.NewToolResultError("Missing recursive parameter"), nil
+	}
 
 	recursionLevel := "oneLevel"
 	if recursive {
@@ -234,8 +274,20 @@ func (tool *WikiTool) handleListWikiPages(ctx context.Context, request mcp.CallT
 }
 
 func (tool *WikiTool) handleSearchWiki(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	query := request.Params.Arguments["query"].(string)
-	path, hasPath := request.Params.Arguments["path"].(string)
+	var (
+		query   string
+		path    string
+		hasPath bool
+		ok      bool
+	)
+
+	if query, ok = request.Params.Arguments["query"].(string); !ok {
+		return mcp.NewToolResultError("Missing query parameter"), nil
+	}
+
+	if path, hasPath = request.Params.Arguments["path"].(string); !ok {
+		return mcp.NewToolResultError("Missing path parameter"), nil
+	}
 
 	// First, get all pages (potentially under the specified path)
 	baseURL := fmt.Sprintf("%s/%s/_apis/wiki/wikis/%s.wiki/pages",

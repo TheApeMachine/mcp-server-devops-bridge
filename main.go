@@ -1,16 +1,16 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
-	"strings"
 
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/theapemachine/mcp-server-devops-bridge/core"
+	"github.com/theapemachine/mcp-server-devops-bridge/core/middleware"
 	"github.com/theapemachine/mcp-server-devops-bridge/pkg/memory"
 	"github.com/theapemachine/mcp-server-devops-bridge/pkg/tools/ai"
 	"github.com/theapemachine/mcp-server-devops-bridge/pkg/tools/azure"
+	"github.com/theapemachine/mcp-server-devops-bridge/pkg/tools/browser"
 	memoryTool "github.com/theapemachine/mcp-server-devops-bridge/pkg/tools/memory"
 	"github.com/theapemachine/mcp-server-devops-bridge/pkg/tools/slack"
 )
@@ -20,9 +20,11 @@ type MultiTool struct {
 	tools map[string]core.Tool
 }
 
-func (mt *MultiTool) addTool(name string, tool core.Tool) {
+func (mt *MultiTool) addTool(name string, tool core.Tool, vectorStore memory.VectorStore, graphStore memory.GraphStore) {
 	mt.tools[name] = tool
-	mcpServer.AddTool(tool.Handle(), tool.Handler)
+	// Wrap handler with memory middleware
+	handler := middleware.MemoryMiddleware(tool.Handler, vectorStore, graphStore)
+	mcpServer.AddTool(tool.Handle(), handler)
 }
 
 var (
@@ -45,51 +47,62 @@ func init() {
 }
 
 func main() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	log.SetOutput(&logWriter{})
-
 	// Initialize memory stores
-	vectorStore, err := memory.NewQdrantStore("memories")
+	var vectorStore memory.VectorStore
+	var graphStore memory.GraphStore
+
+	// Try to initialize vector store
+	vs, err := memory.NewQdrantStore("memories")
 	if err != nil {
 		log.Printf("Warning: Could not initialize vector store: %v", err)
+	} else {
+		vectorStore = vs
+		log.Println("Vector store initialized successfully")
 	}
 
+	// Try to initialize graph store
 	neo4jUrl := os.Getenv("NEO4J_URL")
 	neo4jUser := os.Getenv("NEO4J_USER")
 	neo4jPass := os.Getenv("NEO4J_PASSWORD")
 	neo4jDb := os.Getenv("NEO4J_DATABASE")
 
-	graphStore, err := memory.NewNeo4jStore(neo4jUrl, neo4jUser, neo4jPass, neo4jDb)
-	if err != nil {
-		log.Printf("Warning: Could not initialize graph store: %v", err)
+	if neo4jUrl != "" && neo4jUser != "" && neo4jPass != "" {
+		gs, err := memory.NewNeo4jStore(neo4jUrl, neo4jUser, neo4jPass, neo4jDb)
+		if err != nil {
+			log.Printf("Warning: Could not initialize graph store: %v", err)
+		} else {
+			graphStore = gs
+			log.Println("Graph store initialized successfully")
+		}
+	} else {
+		log.Println("Warning: Neo4j environment variables not set, graph store not initialized")
 	}
 
-	// Initialize tools
-	multiTool.addTool("memory", memoryTool.New(vectorStore, graphStore))
-	multiTool.addTool("agent", ai.NewAgentTool())
+	// Initialize memory tool with both stores
+	memTool := memoryTool.New(vectorStore, graphStore)
+	multiTool.addTool("memory", memTool, vectorStore, graphStore)
+
+	// Initialize AI tools
+	for _, tool := range ai.RegisterAITools() {
+		multiTool.addTool(tool.Handle().Name, tool, vectorStore, graphStore)
+	}
+
+	// Initialize browser tool
+	multiTool.addTool("browser", browser.NewBrowserTool(), vectorStore, graphStore)
 
 	// Initialize Azure tools
 	azureProvider := azure.NewAzureProvider()
-	// Since tools is an unexported field, we need to create a helper method
-	// For now, let's add each tool directly to avoid changing the original code
 	for name, tool := range azureProvider.Tools {
-		multiTool.addTool(name, tool)
+		multiTool.addTool(name, tool, vectorStore, graphStore)
 	}
 
 	// Initialize Slack tool
-	multiTool.addTool("slack", slack.NewSlackTool())
+	multiTool.addTool("slack", slack.NewSlackTool(), vectorStore, graphStore)
+
+	// Start agent cleanup goroutine
+	ai.StartAgentCleanup()
 
 	if err := server.ServeStdio(mcpServer); err != nil {
 		log.Fatalf("Server error: %v\n", err)
 	}
-}
-
-type logWriter struct{}
-
-func (w *logWriter) Write(bytes []byte) (int, error) {
-	// Skip logging "Prompts not supported" errors
-	if strings.Contains(string(bytes), "Prompts not supported") {
-		return len(bytes), nil
-	}
-	return fmt.Print(string(bytes))
 }

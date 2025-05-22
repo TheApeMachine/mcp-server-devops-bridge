@@ -2,6 +2,9 @@
 
 This document outlines a comprehensive plan for improving the MCP Server MultiTool project (formerly DevOps Bridge) based on a thorough code review. The plan addresses inconsistencies, potential issues, and opportunities for enhancement.
 
+PLEASE UNDERSTAND THAT THIS IS A MODEL CONTEXT PROTOCOL SERVER, WHICH MEANS IT IS USED BY AI MODELS TO
+PROVIDE ADDITIONAL CAPABILITIES. YOU SHOULD THEREFOR DEVELOP THE FEATURES ACCORDINGLY!
+
 ## 1. Architecture Improvements
 
 ### 1.1 Modular Structure

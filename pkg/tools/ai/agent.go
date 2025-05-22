@@ -95,7 +95,9 @@ func (tool *AgentTool) ToOpenAITool() openai.ChatCompletionToolParam {
 	}
 }
 
-func (tool *AgentTool) Handler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (tool *AgentTool) Handler(
+	ctx context.Context, request mcp.CallToolRequest,
+) (*mcp.CallToolResult, error) {
 	var (
 		agentID      string
 		ok           bool
@@ -171,6 +173,8 @@ type Agent struct {
 	Tools        string
 	killChan     chan struct{}
 	commandChan  chan string
+	contextStore map[string]interface{}
+	contextMutex sync.RWMutex
 }
 
 func NewAgent(id, systemPrompt, task, paths, tools string, cmds []string) *Agent {
@@ -185,147 +189,233 @@ func NewAgent(id, systemPrompt, task, paths, tools string, cmds []string) *Agent
 		messagingTool.(*SendAgentMessageTool).ToOpenAITool(),
 	}
 
+	// Enhance system prompt with tool awareness
+	enhancedPrompt := fmt.Sprintf(`%s
+
+Available Tools:
+- System commands: %s
+- Messaging capabilities for inter-agent communication
+- Memory access for context persistence
+
+Task Context:
+Your task is: %s
+
+Remember to:
+1. Use available tools effectively
+2. Maintain context between interactions
+3. Communicate clearly with other agents
+4. Store important information in memory
+`, systemPrompt, strings.Join(cmds, ", "), task)
+
 	return &Agent{
 		ID:           id,
-		SystemPrompt: systemPrompt,
+		SystemPrompt: enhancedPrompt,
 		Task:         task,
 		Params: openai.ChatCompletionNewParams{
 			Messages: openai.F([]openai.ChatCompletionMessageParamUnion{
-				openai.SystemMessage(systemPrompt),
+				openai.SystemMessage(enhancedPrompt),
 				openai.UserMessage(task),
 			}),
 			Model:       openai.F(openai.ChatModelGPT4oMini),
 			Tools:       openai.F(openaiTools),
 			Temperature: openai.F(0.0),
 		},
-		Paths:       paths,
-		Tools:       tools,
-		killChan:    make(chan struct{}),
-		commandChan: make(chan string, 10),
+		Paths:        paths,
+		Tools:        tools,
+		killChan:     make(chan struct{}),
+		commandChan:  make(chan string, 10),
+		contextStore: make(map[string]interface{}),
 	}
 }
 
 func (agent *Agent) Run() {
-	llm := openai.NewClient()
-	ctx := context.Background()
+	client := openai.NewClient()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Add agent ID to context
+	ctx = context.WithValue(ctx, "agent_id", agent.ID)
 
 	log.Printf("Agent '%s' started with task: %s", agent.ID, agent.Task)
 
 	for {
 		select {
-		case <-ctx.Done():
-			log.Printf("Agent '%s' terminated due to context cancellation", agent.ID)
-			return
 		case <-agent.killChan:
 			log.Printf("Agent '%s' terminated by kill signal", agent.ID)
 			return
-		case command := <-agent.commandChan:
-			log.Printf("Agent '%s' received command: %s", agent.ID, command)
-			agent.Params.Messages.Value = append(agent.Params.Messages.Value, openai.UserMessage(command))
-			chat, err := llm.Chat.Completions.New(ctx, agent.Params)
+		case cmd := <-agent.commandChan:
+			log.Printf("Agent '%s' received command: %s", agent.ID, cmd)
 
+			// Store command in context
+			agent.storeContext("last_command", cmd)
+
+			// Execute command if it's a system command
+			if strings.HasPrefix(cmd, "system:") {
+				cmdStr := strings.TrimPrefix(cmd, "system:")
+				output, err := executeCommand(cmdStr, agent.Paths, agent.Tools)
+				if err != nil {
+					log.Printf("Agent %s command error: %v", agent.ID, err)
+					continue
+				}
+				// Store result in context
+				agent.storeContext("last_result", output)
+				// Update conversation with command result
+				messages := agent.Params.Messages.Value
+				messages = append(messages, openai.AssistantMessage(
+					fmt.Sprintf("Command executed: %s\nResult: %s", cmdStr, output),
+				))
+				agent.Params.Messages.Value = messages
+			} else {
+				// Add user command to conversation
+				messages := agent.Params.Messages.Value
+				messages = append(messages, openai.UserMessage(cmd))
+				agent.Params.Messages.Value = messages
+			}
+
+			// Get completion from OpenAI for the command
+			chat, err := client.Chat.Completions.New(ctx, agent.Params)
 			if err != nil {
-				log.Printf("Error running agent '%s': %v", agent.ID, err)
-				return
+				log.Printf("Agent %s OpenAI error: %v", agent.ID, err)
+				continue
 			}
 
-			// Add the assistant's response to the history
-			agent.Params.Messages.Value = append(agent.Params.Messages.Value, chat.Choices[0].Message)
+			// Process the completion
+			agent.processCompletion(ctx, chat)
 
-			// Check if there are tool calls in the response
-			toolCalls := chat.Choices[0].Message.ToolCalls
-
-			if len(toolCalls) == 0 {
-				break
+		default:
+			// Check for messages from other agents
+			messages := messageBus.GetMessages(agent.ID)
+			if len(messages) > 0 {
+				log.Printf("Agent '%s' received %d messages", agent.ID, len(messages))
+				// Process messages and update context
+				for _, msg := range messages {
+					agent.processMessage(msg)
+				}
 			}
 
-			// Process each tool call
-			for _, toolCall := range toolCalls {
-				switch toolCall.Function.Name {
-				case "system":
-					var out strings.Builder
-					// Extract the command from the function call arguments
-					var args map[string]any
+			// Get completion from OpenAI for any pending messages
+			chat, err := client.Chat.Completions.New(ctx, agent.Params)
+			if err != nil {
+				log.Printf("Agent %s OpenAI error: %v", agent.ID, err)
+				time.Sleep(5 * time.Second)
+				continue
+			}
 
-					if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
-						out.WriteString(err.Error())
-						agent.Params.Messages.Value = append(agent.Params.Messages.Value, openai.ToolMessage(toolCall.ID, out.String()))
-						continue
+			// Process the completion
+			agent.processCompletion(ctx, chat)
+		}
+
+		// Sleep briefly to prevent tight loop
+		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+func (agent *Agent) processMessage(msg Message) {
+	// Store message in context
+	agent.storeContext(fmt.Sprintf("message_from_%s", msg.From), msg.Content)
+
+	// Add message to conversation
+	messages := agent.Params.Messages.Value
+	messages = append(messages, openai.UserMessage(
+		fmt.Sprintf("Message from %s: %v", msg.From, msg.Content),
+	))
+	agent.Params.Messages.Value = messages
+}
+
+func (agent *Agent) processCompletion(ctx context.Context, chat *openai.ChatCompletion) {
+	if chat == nil || len(chat.Choices) == 0 {
+		return
+	}
+
+	choice := chat.Choices[0]
+	if choice.Message.Content == "" {
+		return
+	}
+
+	// Store completion in context
+	agent.storeContext("last_completion", choice.Message.Content)
+
+	// Add completion to conversation history
+	messages := agent.Params.Messages.Value
+	messages = append(messages, openai.AssistantMessage(choice.Message.Content))
+	agent.Params.Messages.Value = messages
+
+	// Log the agent's response
+	log.Printf("Agent '%s' response: %s", agent.ID, choice.Message.Content)
+
+	// Process any tool calls
+	if len(choice.Message.ToolCalls) > 0 {
+		for _, toolCall := range choice.Message.ToolCalls {
+			if toolCall.Function.Name == "" {
+				continue
+			}
+
+			log.Printf("Agent '%s' executing tool call: %s", agent.ID, toolCall.Function.Name)
+
+			// Parse function arguments
+			var args map[string]interface{}
+			if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
+				log.Printf("Agent %s tool call argument parse error: %v", agent.ID, err)
+				continue
+			}
+
+			// Store tool call in context
+			agent.storeContext(fmt.Sprintf("tool_call_%s", toolCall.Function.Name), args)
+
+			// Handle tool call based on function name
+			switch toolCall.Function.Name {
+			case "send_agent_message":
+				// Handle message sending
+				if topic, ok := args["topic"].(string); ok {
+					if content, ok := args["content"].(string); ok {
+						msg := Message{
+							From:    agent.ID,
+							Topic:   topic,
+							Content: content,
+						}
+						if err := messageBus.Publish(msg); err != nil {
+							log.Printf("Agent '%s' failed to publish message: %v", agent.ID, err)
+						} else {
+							log.Printf("Agent '%s' published message to topic '%s'", agent.ID, topic)
+						}
 					}
-
-					cmd := args["command"].(string)
+				}
+			case "system":
+				// Handle system command
+				if cmd, ok := args["command"].(string); ok {
 					output, err := executeCommand(cmd, agent.Paths, agent.Tools)
-
 					if err != nil {
-						out.WriteString(err.Error())
-						agent.Params.Messages.Value = append(agent.Params.Messages.Value, openai.ToolMessage(toolCall.ID, out.String()))
+						log.Printf("Agent '%s' system command error: %v", agent.ID, err)
 						continue
 					}
-
-					agent.Params.Messages.Value = append(agent.Params.Messages.Value, openai.ToolMessage(toolCall.ID, output))
-				case "messaging":
-					var (
-						args map[string]any
-						out  strings.Builder
+					log.Printf(
+						"Agent '%s' executed system command '%s' with output: %s",
+						agent.ID, cmd, output,
 					)
 
-					if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
-						out.WriteString(err.Error())
-						agent.Params.Messages.Value = append(agent.Params.Messages.Value, openai.ToolMessage(toolCall.ID, out.String()))
-						continue
-					}
-
-					// Get message details
-					topic, topicOk := args["topic"].(string)
-					content, contentOk := args["content"].(string)
-
-					if !topicOk || !contentOk {
-						out.WriteString("Error: Invalid message format")
-						agent.Params.Messages.Value = append(agent.Params.Messages.Value, openai.ToolMessage(toolCall.ID, out.String()))
-						continue
-					}
-
-					// Publish message to bus
-					msg := Message{
-						From:    agent.ID,
-						Topic:   topic,
-						Content: content,
-					}
-
-					err := messageBus.Publish(msg)
-					result := "Message sent successfully to topic: " + topic
-
-					if err != nil {
-						out.WriteString("Failed to send message: " + err.Error())
-						agent.Params.Messages.Value = append(agent.Params.Messages.Value, openai.ToolMessage(toolCall.ID, out.String()))
-						continue
-					}
-
-					out.WriteString(result)
-					agent.Params.Messages.Value = append(agent.Params.Messages.Value, openai.ToolMessage(toolCall.ID, out.String()))
+					// Add command result to conversation
+					messages := agent.Params.Messages.Value
+					messages = append(messages, openai.AssistantMessage(
+						fmt.Sprintf("Command executed: %s\nResult: %s", cmd, output),
+					))
+					agent.Params.Messages.Value = messages
 				}
 			}
-		default:
-			// Check for messages addressed to this agent
-			messages := messageBus.GetMessages(agent.ID)
-
-			if len(messages) > 0 {
-				for _, msg := range messages {
-					content, ok := msg.Content.(string)
-					if !ok {
-						continue
-					}
-
-					msgText := fmt.Sprintf("Message from agent '%s' on topic '%s':\n%s",
-						msg.From, msg.Topic, content)
-
-					agent.commandChan <- msgText
-				}
-			}
-
-			time.Sleep(100 * time.Millisecond)
 		}
 	}
+}
+
+func (agent *Agent) storeContext(key string, value interface{}) {
+	agent.contextMutex.Lock()
+	defer agent.contextMutex.Unlock()
+	agent.contextStore[key] = value
+}
+
+func (agent *Agent) getContext(key string) (interface{}, bool) {
+	agent.contextMutex.RLock()
+	defer agent.contextMutex.RUnlock()
+	value, exists := agent.contextStore[key]
+	return value, exists
 }
 
 // executeCommand runs a command in a Docker container and returns its output

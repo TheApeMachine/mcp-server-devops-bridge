@@ -25,6 +25,22 @@ func (tool *SprintTool) Handle() mcp.Tool {
 }
 
 func (tool *SprintTool) Handler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var (
+		op string
+		ok bool
+	)
+
+	if op, ok = request.Params.Arguments["operation"].(string); !ok {
+		return mcp.NewToolResultError("Missing operation parameter"), nil
+	}
+
+	switch op {
+	case "get_current_sprint":
+		return tool.handleGetCurrentSprint()
+	case "get_sprints":
+		return tool.handleGetSprints(request)
+	}
+
 	return nil, nil
 }
 
@@ -36,7 +52,7 @@ func NewSprintTool(conn *azuredevops.Connection, config AzureDevOpsConfig) core.
 	}
 }
 
-func (tool *SprintTool) handleGetCurrentSprint(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (tool *SprintTool) handleGetCurrentSprint() (*mcp.CallToolResult, error) {
 	// Build the URL for the current iteration
 	baseURL := fmt.Sprintf("%s/%s/_apis/work/teamsettings/iterations",
 		tool.config.OrganizationURL,
@@ -95,11 +111,14 @@ func (tool *SprintTool) handleGetCurrentSprint(ctx context.Context, request mcp.
 	return mcp.NewToolResultText(result), nil
 }
 
-func (tool *SprintTool) handleGetSprints(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	team, _ := request.Params.Arguments["team"].(string)
-	includeCompleted, _ := request.Params.Arguments["include_completed"].(bool)
-	if team == "" {
-		team = tool.config.Project + " Team"
+func (tool *SprintTool) handleGetSprints(request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	var (
+		includeCompleted bool
+		ok               bool
+	)
+
+	if includeCompleted, ok = request.Params.Arguments["include_completed"].(bool); !ok {
+		return mcp.NewToolResultError("Missing include_completed parameter"), nil
 	}
 
 	// Build the URL for iterations

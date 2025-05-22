@@ -14,7 +14,16 @@ import (
 
 // Handler for getting work item templates
 func (tool *WorkItemTool) handleGetWorkItemTemplates(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	workItemType := request.Params.Arguments["type"].(string)
+	// Safely get the workItemType with a fallback to empty string if not provided
+	workItemTypeValue, exists := request.Params.Arguments["type"]
+	if !exists || workItemTypeValue == nil {
+		return mcp.NewToolResultError("Missing required parameter: 'type'. Please specify the work item type to get templates for."), nil
+	}
+	
+	workItemType, ok := workItemTypeValue.(string)
+	if !ok {
+		return mcp.NewToolResultError("Parameter 'type' must be a string."), nil
+	}
 
 	templates, err := tool.client.GetTemplates(ctx, workitemtracking.GetTemplatesArgs{
 		Project:          &tool.config.Project,
@@ -42,8 +51,27 @@ func (tool *WorkItemTool) handleGetWorkItemTemplates(ctx context.Context, reques
 
 // Handler for creating work item from template
 func (tool *WorkItemTool) handleCreateFromTemplate(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	templateID := request.Params.Arguments["template_id"].(string)
-	fieldValuesJSON := request.Params.Arguments["field_values"].(string)
+	// Safely get the templateID parameter
+	templateIDValue, exists := request.Params.Arguments["template_id"]
+	if !exists || templateIDValue == nil {
+		return mcp.NewToolResultError("Missing required parameter: 'template_id'. Please specify the template ID."), nil
+	}
+	
+	templateID, ok := templateIDValue.(string)
+	if !ok {
+		return mcp.NewToolResultError("Parameter 'template_id' must be a string."), nil
+	}
+	
+	// Safely get the fieldValuesJSON parameter
+	fieldValuesJSONValue, exists := request.Params.Arguments["field_values"]
+	if !exists || fieldValuesJSONValue == nil {
+		return mcp.NewToolResultError("Missing required parameter: 'field_values'. Please provide field values in JSON format."), nil
+	}
+	
+	fieldValuesJSON, ok := fieldValuesJSONValue.(string)
+	if !ok {
+		return mcp.NewToolResultError("Parameter 'field_values' must be a string containing JSON."), nil
+	}
 
 	var fieldValues map[string]any
 	if err := json.Unmarshal([]byte(fieldValuesJSON), &fieldValues); err != nil {

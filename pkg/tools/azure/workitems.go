@@ -90,12 +90,17 @@ func (tool *WorkItemTool) operationHandlers() map[string]OperationHandler {
 
 // Handler dispatches operations based on the "operation" argument.
 func (tool *WorkItemTool) Handler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	op, ok := request.Params.Arguments["operation"].(string)
-	if !ok {
+	var (
+		op string
+		ok bool
+	)
+
+	if op, ok = request.Params.Arguments["operation"].(string); !ok {
 		return mcp.NewToolResultError("Missing operation parameter"), nil
 	}
 
 	handlers := tool.operationHandlers()
+
 	if handler, exists := handlers[op]; exists {
 		return handler(ctx, request)
 	}
@@ -105,36 +110,57 @@ func (tool *WorkItemTool) Handler(ctx context.Context, request mcp.CallToolReque
 
 // Helper to extract a string argument.
 func getStringArg(req mcp.CallToolRequest, key string) (string, error) {
-	val, ok := req.Params.Arguments[key]
-	if !ok {
+	var (
+		val interface{}
+		str string
+		ok  bool
+	)
+
+	if val, ok = req.Params.Arguments[key]; !ok {
 		return "", fmt.Errorf("missing argument: %s", key)
 	}
-	str, ok := val.(string)
+
+	str, ok = val.(string)
+
 	if !ok {
 		return "", fmt.Errorf("argument %s is not a string", key)
 	}
+
 	return str, nil
 }
 
 // Helper to extract a float64 argument.
 func getFloat64Arg(req mcp.CallToolRequest, key string) (float64, error) {
-	val, ok := req.Params.Arguments[key]
-	if !ok {
+	var (
+		val interface{}
+		f   float64
+		ok  bool
+	)
+
+	if val, ok = req.Params.Arguments[key]; !ok {
 		return 0, fmt.Errorf("missing argument: %s", key)
 	}
-	f, ok := val.(float64)
+
+	f, ok = val.(float64)
+
 	if !ok {
 		return 0, fmt.Errorf("argument %s is not a number", key)
 	}
+
 	return f, nil
 }
 
 // Helper to extract an int argument from a float64.
 func getIntArg(req mcp.CallToolRequest, key string) (int, error) {
-	f, err := getFloat64Arg(req, key)
-	if err != nil {
+	var (
+		f   float64
+		err error
+	)
+
+	if f, err = getFloat64Arg(req, key); err != nil {
 		return 0, err
 	}
+
 	return int(f), nil
 }
 
@@ -145,8 +171,12 @@ func handleError(err error, message string) *mcp.CallToolResult {
 
 // Helper to parse a comma-separated list of IDs
 func parseIDs(idsStr string) ([]int, error) {
-	idStrs := strings.Split(idsStr, ",")
-	var ids []int
+	var (
+		idStrs []string
+		ids    []int
+	)
+
+	idStrs = strings.Split(idsStr, ",")
 
 	for _, idStr := range idStrs {
 		id, err := strconv.Atoi(strings.TrimSpace(idStr))

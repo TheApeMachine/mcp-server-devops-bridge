@@ -87,8 +87,12 @@ func (tool *Tool) validate(request mcp.CallToolRequest) (ok bool, err error) {
 // Handler processes memory tool requests
 func (tool *Tool) Handler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	var (
-		ok  bool
-		err error
+		ok       bool
+		err      error
+		document string
+		question string
+		keywords string
+		cypher   string
 	)
 
 	if ok, err = tool.validate(request); !ok {
@@ -97,9 +101,6 @@ func (tool *Tool) Handler(ctx context.Context, request mcp.CallToolRequest) (*mc
 
 	switch op := request.Params.Arguments["operation"].(string); op {
 	case "add":
-		document := ""
-		cypher := ""
-
 		if doc, ok := request.Params.Arguments["document"].(string); ok {
 			document = doc
 		}
@@ -110,10 +111,6 @@ func (tool *Tool) Handler(ctx context.Context, request mcp.CallToolRequest) (*mc
 
 		return tool.handleAddMemory(ctx, document, cypher)
 	case "query":
-		question := ""
-		keywords := ""
-		cypher := ""
-
 		if q, ok := request.Params.Arguments["question"].(string); ok {
 			question = q
 		}
@@ -134,31 +131,43 @@ func (tool *Tool) Handler(ctx context.Context, request mcp.CallToolRequest) (*mc
 
 // handleAddMemory processes memory addition requests
 func (tool *Tool) handleAddMemory(ctx context.Context, document string, cypher string) (*mcp.CallToolResult, error) {
-	errors := []string{}
-	results := []string{}
+	var (
+		errors  []string
+		results []string
+	)
 
 	if document != "" {
-		// Store the document in the vector store
-		err := tool.vectorStore.Store(ctx, document, map[string]interface{}{
-			"timestamp": ctx.Value("timestamp"),
-			"source":    "memory_tool",
-		})
-
-		if err != nil {
-			errors = append(errors, fmt.Sprintf("Failed to store in vector DB: %v", err))
+		// Check if vector store is available
+		if tool.vectorStore == nil {
+			errors = append(errors, "Vector store is not available")
 		} else {
-			results = append(results, "Memory added to vector store")
+			// Store the document in the vector store
+			err := tool.vectorStore.Store(ctx, document, map[string]interface{}{
+				"timestamp": ctx.Value("timestamp"),
+				"source":    "memory_tool",
+			})
+
+			if err != nil {
+				errors = append(errors, fmt.Sprintf("Failed to store in vector DB: %v", err))
+			} else {
+				results = append(results, "Memory added to vector store")
+			}
 		}
 	}
 
 	if cypher != "" {
-		// Execute the Cypher query in the graph store
-		err := tool.graphStore.Execute(ctx, cypher, nil)
-
-		if err != nil {
-			errors = append(errors, fmt.Sprintf("Failed to store in graph DB: %v", err))
+		// Check if graph store is available
+		if tool.graphStore == nil {
+			errors = append(errors, "Graph store is not available")
 		} else {
-			results = append(results, "Memory added to graph store")
+			// Execute the Cypher query in the graph store
+			err := tool.graphStore.Execute(ctx, cypher, nil)
+
+			if err != nil {
+				errors = append(errors, fmt.Sprintf("Failed to store in graph DB: %v", err))
+			} else {
+				results = append(results, "Memory added to graph store")
+			}
 		}
 	}
 
@@ -175,41 +184,53 @@ func (tool *Tool) handleQueryMemory(ctx context.Context, question string, keywor
 	results := []string{}
 
 	if question != "" {
-		// Search the vector store
-		vectorResults, err := tool.vectorStore.Search(ctx, question)
-
-		if err != nil {
-			errors = append(errors, fmt.Sprintf("Failed to query vector DB: %v", err))
-		} else if len(vectorResults) > 0 {
-			results = append(results, "<VECTOR_MEMORIES>")
-			for _, result := range vectorResults {
-				results = append(results, "\t"+result)
-			}
-			results = append(results, "</VECTOR_MEMORIES>")
+		if tool.vectorStore == nil {
+			errors = append(errors, "Vector store is not available")
 		} else {
-			results = append(results, "No vector memories found")
+			// Search the vector store
+			vectorResults, err := tool.vectorStore.Search(ctx, question)
+
+			if err != nil {
+				errors = append(errors, fmt.Sprintf("Failed to query vector DB: %v", err))
+			} else if len(vectorResults) > 0 {
+				results = append(results, "<VECTOR_MEMORIES>")
+				for _, result := range vectorResults {
+					results = append(results, "\t"+result)
+				}
+				results = append(results, "</VECTOR_MEMORIES>")
+			} else {
+				results = append(results, "No vector memories found")
+			}
 		}
 	}
 
 	if keywords != "" || cypher != "" {
-		// Query the graph store
-		graphResults, err := tool.graphStore.Query(ctx, keywords, cypher)
-
-		if err != nil {
-			errors = append(errors, fmt.Sprintf("Failed to query graph DB: %v", err))
-		} else if len(graphResults) > 0 {
-			results = append(results, "<GRAPH_MEMORIES>")
-			for _, result := range graphResults {
-				results = append(results, "\t"+result)
-			}
-			results = append(results, "</GRAPH_MEMORIES>")
+		if tool.graphStore == nil {
+			errors = append(errors, "Graph store is not available")
 		} else {
-			results = append(results, "No graph memories found")
+			// Query the graph store
+			graphResults, err := tool.graphStore.Query(ctx, keywords, cypher)
+
+			if err != nil {
+				errors = append(errors, fmt.Sprintf("Failed to query graph DB: %v", err))
+			} else if len(graphResults) > 0 {
+				results = append(results, "<GRAPH_MEMORIES>")
+				for _, result := range graphResults {
+					results = append(results, "\t"+result)
+				}
+				results = append(results, "</GRAPH_MEMORIES>")
+			} else {
+				results = append(results, "No graph memories found")
+			}
 		}
 	}
 
 	if len(errors) > 0 {
 		return mcp.NewToolResultText(strings.Join(errors, "\n")), nil
+	}
+
+	if len(results) == 0 {
+		return mcp.NewToolResultText("No memories found"), nil
 	}
 
 	return mcp.NewToolResultText(strings.Join(results, "\n")), nil
