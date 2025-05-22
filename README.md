@@ -163,6 +163,27 @@ Under the hood, each agent runs inside a dedicated Docker container, providing:
   - Query current and upcoming sprints
   - Track sprint progress
 
+### New Modular Azure DevOps Tools
+
+The Azure DevOps integration now includes a set of modular tools that are easier to use and more AI-friendly:
+
+- **azure_sprint_items**: Find work items in the current sprint
+- **azure_create_work_item**: Create new work items with rich options
+- **azure_create_work_item_custom**: Create work items with support for custom fields
+- **azure_find_items_by_status**: Search for work items by status and other criteria
+- **azure_get_work_item**: Get detailed information about specific work items
+- **azure_work_item_comments**: Add and retrieve comments on work items
+
+These new tools feature:
+
+- Focused single-responsibility design
+- Clear parameter naming and validation
+- Detailed error messages with suggestions
+- Consistent response formats (text and JSON)
+- AI-assistant friendly design
+
+For more details, see `pkg/tools/azure/tools/README.md`
+
 ### GitHub Integration
 
 - **Pull Request Management**

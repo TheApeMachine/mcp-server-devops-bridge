@@ -8,7 +8,7 @@ import (
 // VectorStore defines the interface for vector database operations
 type VectorStore interface {
 	// Store saves a text document with metadata to the vector store
-	Store(ctx context.Context, text string, metadata map[string]interface{}) error
+	Store(ctx context.Context, text string, metadata map[string]any) error
 
 	// Search performs a semantic search for similar texts
 	Search(ctx context.Context, query string) ([]string, error)
@@ -17,7 +17,7 @@ type VectorStore interface {
 // GraphStore defines the interface for graph database operations
 type GraphStore interface {
 	// Execute runs a Cypher query with parameters
-	Execute(ctx context.Context, query string, params map[string]interface{}) error
+	Execute(ctx context.Context, query string, params map[string]any) error
 
 	// Query searches the graph database with keywords or a custom Cypher query
 	Query(ctx context.Context, keywords string, cypher string) ([]string, error)

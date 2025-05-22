@@ -14,6 +14,15 @@ import (
 	"github.com/theapemachine/mcp-server-devops-bridge/core"
 )
 
+// SprintOutput defines the structure for a single sprint's details for output.
+type SprintOutput struct {
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	IterationPath string `json:"iteration_path"`
+	StartDate     string `json:"start_date"`
+	EndDate       string `json:"end_date"`
+}
+
 type SprintTool struct {
 	handle mcp.Tool
 	conn   *azuredevops.Connection
@@ -35,146 +44,192 @@ func (tool *SprintTool) Handler(ctx context.Context, request mcp.CallToolRequest
 	}
 
 	switch op {
-	case "get_current_sprint":
-		return tool.handleGetCurrentSprint()
-	case "get_sprints":
-		return tool.handleGetSprints(request)
+	case "get_current_sprint_details": // Renamed for clarity
+		return tool.handleGetCurrentSprintDetails(ctx, request)
+	case "list_sprints": // Renamed for clarity
+		return tool.handleListSprints(ctx, request)
 	}
 
-	return nil, nil
+	return mcp.NewToolResultError(fmt.Sprintf("Unsupported operation: %s", op)), nil
 }
 
 func NewSprintTool(conn *azuredevops.Connection, config AzureDevOpsConfig) core.Tool {
 	return &SprintTool{
-		handle: mcp.NewTool("sprint", mcp.WithDescription("Manage sprints in Azure DevOps")),
+		handle: mcp.NewTool("sprint", // Tool name remains 'sprint'
+			mcp.WithDescription("Get information about sprints (iterations) in Azure DevOps."),
+			mcp.WithString("operation", mcp.Required(), mcp.Description("Operation to perform: get_current_sprint_details, list_sprints"), mcp.Enum("get_current_sprint_details", "list_sprints")),
+			mcp.WithString("format", mcp.Description("Response format: 'text' (default) or 'json'")),
+			mcp.WithString("include_completed", mcp.Description("For list_sprints: whether to include completed sprints (default: false)"), mcp.Enum("true", "false")),
+		),
 		conn:   conn,
 		config: config,
 	}
 }
 
-func (tool *SprintTool) handleGetCurrentSprint() (*mcp.CallToolResult, error) {
-	// Build the URL for the current iteration
-	baseURL := fmt.Sprintf("%s/%s/_apis/work/teamsettings/iterations",
-		tool.config.OrganizationURL,
-		tool.config.Project)
-
-	queryParams := url.Values{}
-	queryParams.Add("$timeframe", "current")
-	queryParams.Add("api-version", "7.2-preview")
-
-	fullURL := fmt.Sprintf("%s?%s", baseURL, queryParams.Encode())
-
-	// Create request
-	req, err := http.NewRequest("GET", fullURL, nil)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to create request: %v", err)), nil
-	}
-
-	// Add authentication
-	req.SetBasicAuth("", tool.config.PersonalAccessToken)
-
-	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to get current sprint: %v", err)), nil
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to get current sprint. Status: %d", resp.StatusCode)), nil
-	}
-
-	// Parse response
-	var sprintResponse struct {
-		Value []struct {
-			Name      string    `json:"name"`
-			StartDate time.Time `json:"startDate"`
-			EndDate   time.Time `json:"finishDate"`
-		} `json:"value"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&sprintResponse); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to parse response: %v", err)), nil
-	}
-
-	if len(sprintResponse.Value) == 0 {
-		return mcp.NewToolResultText("No active sprint found"), nil
-	}
-
-	sprint := sprintResponse.Value[0]
-	result := fmt.Sprintf("Current Sprint: %s\nStart Date: %s\nEnd Date: %s",
-		sprint.Name,
-		sprint.StartDate.Format("2006-01-02"),
-		sprint.EndDate.Format("2006-01-02"))
-
-	return mcp.NewToolResultText(result), nil
+// APIIterationResponseValue defines the structure for parsing individual iteration from Azure DevOps API.
+type APIIterationResponseValue struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Path       string `json:"path"` // This is the Iteration Path
+	Attributes struct {
+		StartDate  *time.Time `json:"startDate"`  // Use pointer to handle potential nulls if API sends that
+		FinishDate *time.Time `json:"finishDate"` // Use pointer
+		TimeFrame  string     `json:"timeFrame"`
+	} `json:"attributes"`
 }
 
-func (tool *SprintTool) handleGetSprints(request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	var (
-		includeCompleted bool
-		ok               bool
-	)
+// APIIterationsResponse defines the overall structure for the iterations API response.
+type APIIterationsResponse struct {
+	Count int64                       `json:"count"`
+	Value []APIIterationResponseValue `json:"value"`
+}
 
-	if includeCompleted, ok = request.Params.Arguments["include_completed"].(bool); !ok {
-		return mcp.NewToolResultError("Missing include_completed parameter"), nil
+func formatSprintOutputToJSON(sprintOutput SprintOutput) (string, error) {
+	jsonData, err := json.MarshalIndent(sprintOutput, "", "  ")
+	if err != nil {
+		return "", err
 	}
+	return string(jsonData), nil
+}
 
-	// Build the URL for iterations
-	baseURL := fmt.Sprintf("%s/%s/_apis/work/teamsettings/iterations",
+func formatSprintOutputToText(sprintOutput SprintOutput) string {
+	return fmt.Sprintf("Sprint ID: %s\nName: %s\nIteration Path: %s\nStart Date: %s\nEnd Date: %s",
+		sprintOutput.ID, sprintOutput.Name, sprintOutput.IterationPath, sprintOutput.StartDate, sprintOutput.EndDate)
+}
+
+func formatSprintsOutputToJSON(sprintsOutput []SprintOutput) (string, error) {
+	jsonData, err := json.MarshalIndent(sprintsOutput, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(jsonData), nil
+}
+
+func formatSprintsOutputToText(sprintsOutput []SprintOutput) string {
+	var results []string
+	if len(sprintsOutput) == 0 {
+		return "No sprints found matching the criteria."
+	}
+	results = append(results, "## Sprints List\n")
+	for _, sprint := range sprintsOutput {
+		results = append(results, fmt.Sprintf("Name: %s\n  ID: %s\n  Iteration Path: %s\n  Start Date: %s\n  End Date: %s\n---",
+			sprint.Name, sprint.ID, sprint.IterationPath, sprint.StartDate, sprint.EndDate))
+	}
+	return strings.Join(results, "\n")
+}
+
+func (tool *SprintTool) callIterationsAPI(timeframe string) (*APIIterationsResponse, error) {
+	teamID := "702276d6-e0ea-4d99-b224-e8d468c12d9d" // Hardcoded team ID as per user
+	baseURL := fmt.Sprintf("%s/%s/%s/_apis/work/teamsettings/iterations",
 		tool.config.OrganizationURL,
-		tool.config.Project)
+		tool.config.Project,
+		teamID)
 
 	queryParams := url.Values{}
-	if !includeCompleted {
-		queryParams.Add("$timeframe", "current,future")
+	if timeframe != "" { // Allow fetching all if timeframe is empty, though API might default
+		queryParams.Add("$timeframe", timeframe)
 	}
-	queryParams.Add("api-version", "7.2-preview")
+	queryParams.Add("api-version", "7.1") // Using a generally available API version
 
 	fullURL := fmt.Sprintf("%s?%s", baseURL, queryParams.Encode())
 
 	req, err := http.NewRequest("GET", fullURL, nil)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to create request: %v", err)), nil
+		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
-
 	req.SetBasicAuth("", tool.config.PersonalAccessToken)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to get sprints: %v", err)), nil
+		return nil, fmt.Errorf("failed to call iterations API: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to get sprints. Status: %d", resp.StatusCode)), nil
+		return nil, fmt.Errorf("failed to get iterations, API status: %d", resp.StatusCode)
 	}
 
-	var sprintResponse struct {
-		Value []struct {
-			Name      string    `json:"name"`
-			StartDate time.Time `json:"startDate"`
-			EndDate   time.Time `json:"finishDate"`
-		} `json:"value"`
+	var apiResponse APIIterationsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResponse); err != nil {
+		return nil, fmt.Errorf("failed to parse iterations API response: %v", err)
+	}
+	return &apiResponse, nil
+}
+
+func (tool *SprintTool) handleGetCurrentSprintDetails(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	apiResponse, err := tool.callIterationsAPI("current")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&sprintResponse); err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to parse response: %v", err)), nil
+	if len(apiResponse.Value) == 0 {
+		return mcp.NewToolResultText("No active sprint found."), nil
 	}
 
-	var results []string
-	for _, sprint := range sprintResponse.Value {
-		results = append(results, fmt.Sprintf("Sprint: %s\nStart: %s\nEnd: %s\n---",
-			sprint.Name,
-			sprint.StartDate.Format("2006-01-02"),
-			sprint.EndDate.Format("2006-01-02")))
+	currentAPISprint := apiResponse.Value[0]
+	sprintOutput := SprintOutput{
+		ID:            currentAPISprint.ID,
+		Name:          currentAPISprint.Name,
+		IterationPath: currentAPISprint.Path,
+	}
+	if currentAPISprint.Attributes.StartDate != nil {
+		sprintOutput.StartDate = currentAPISprint.Attributes.StartDate.Format("2006-01-02")
+	}
+	if currentAPISprint.Attributes.FinishDate != nil {
+		sprintOutput.EndDate = currentAPISprint.Attributes.FinishDate.Format("2006-01-02")
 	}
 
-	if len(results) == 0 {
-		return mcp.NewToolResultText("No sprints found"), nil
+	format, _ := request.Params.Arguments["format"].(string)
+	if strings.ToLower(format) == "json" {
+		jsonStr, err := formatSprintOutputToJSON(sprintOutput)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(jsonStr), nil
 	}
 
-	return mcp.NewToolResultText(strings.Join(results, "\n")), nil
+	return mcp.NewToolResultText(formatSprintOutputToText(sprintOutput)), nil
+}
+
+func (tool *SprintTool) handleListSprints(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	includeCompletedStr, _ := request.Params.Arguments["include_completed"].(string)
+	includeCompleted := strings.ToLower(includeCompletedStr) == "true"
+
+	timeframe := "current,future"
+	if includeCompleted {
+		timeframe = "" // Empty timeframe often means all for this API, or rely on API default
+	}
+
+	apiResponse, err := tool.callIterationsAPI(timeframe)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	var sprintOutputs []SprintOutput
+	for _, apiSprint := range apiResponse.Value {
+		sprint := SprintOutput{
+			ID:            apiSprint.ID,
+			Name:          apiSprint.Name,
+			IterationPath: apiSprint.Path,
+		}
+		if apiSprint.Attributes.StartDate != nil {
+			sprint.StartDate = apiSprint.Attributes.StartDate.Format("2006-01-02")
+		}
+		if apiSprint.Attributes.FinishDate != nil {
+			sprint.EndDate = apiSprint.Attributes.FinishDate.Format("2006-01-02")
+		}
+		sprintOutputs = append(sprintOutputs, sprint)
+	}
+
+	format, _ := request.Params.Arguments["format"].(string)
+	if strings.ToLower(format) == "json" {
+		jsonStr, err := formatSprintsOutputToJSON(sprintOutputs)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(jsonStr), nil
+	}
+
+	return mcp.NewToolResultText(formatSprintsOutputToText(sprintOutputs)), nil
 }

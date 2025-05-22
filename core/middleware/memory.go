@@ -202,7 +202,7 @@ func storeResult(
 
 	// Store in vector database
 	if vectorStore != nil {
-		vectorStore.Store(ctx, text, map[string]interface{}{
+		vectorStore.Store(ctx, text, map[string]any{
 			"context": requestContext,
 			"time":    time.Now().Format(time.RFC3339),
 		})
@@ -214,7 +214,7 @@ func storeResult(
 		cypher := fmt.Sprintf(
 			"CREATE (m:Memory {text: $text, timestamp: $timestamp, context: $context})",
 		)
-		graphStore.Execute(ctx, cypher, map[string]interface{}{
+		graphStore.Execute(ctx, cypher, map[string]any{
 			"text":      text,
 			"timestamp": time.Now().Unix(),
 			"context":   requestContext,

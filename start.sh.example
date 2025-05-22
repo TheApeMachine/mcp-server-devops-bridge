@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# Azure DevOps Configuration
+export AZURE_DEVOPS_ORG="<your-azure-devops-org>"
+export AZDO_PAT="<your-azure-devops-pat>"
+export AZURE_DEVOPS_PROJECT="<your-azure-devops-project>"
+export AZURE_DEVOPS_TEAM="<your-azure-devops-team>"
+
+# GitHub Configuration
+export GITHUB_PAT="<your-github-pat>"
+
+# Slack Configuration
+export SLACK_BOT_TOKEN="<your-slack-bot-token>"
+export DEFAULT_SLACK_CHANNEL="<your-slack-channel>"
+
+# N8N Configuration
+export N8N_BASE_URL="<your-n8n-base-url>"
+export N8N_API_KEY="<your-n8n-api-key>"
+
+# OpenAI Configuration
+export OPENAI_API_KEY="<your-openai-api-key>"
+
+# Qdrant Configuration
+export QDRANT_URL="<your-qdrant-url>"
+export QDRANT_API_KEY="<your-qdrant-api-key>"
+
+# Neo4j Configuration
+export NEO4J_URL="<your-neo4j-url>"
+export NEO4J_USER="<your-neo4j-user>"
+export NEO4J_PASSWORD="<your-neo4j-password>"
+
+# Email Configuration (if using email features)
+export EMAIL_INBOX_WEBHOOK_URL="<your-email-inbox-webhook-url>"
+export EMAIL_SEARCH_WEBHOOK_URL="<your-email-search-webhook-url>"
+export EMAIL_REPLY_WEBHOOK_URL="<your-email-reply-webhook-url>"
+
+# Path to the MCP Server DevOps Bridge executable
+export MCP_SERVER_DEVOPS_BRIDGE_PATH="<path-to-mcp-server-devops-bridge>"
+
+# Run the MCP Server DevOps Bridge
+$MCP_SERVER_DEVOPS_BRIDGE_PATH

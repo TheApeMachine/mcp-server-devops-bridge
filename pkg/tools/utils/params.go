@@ -15,12 +15,12 @@ func GetStringParam(req mcp.CallToolRequest, key string, required bool) (string,
 		}
 		return "", nil
 	}
-	
+
 	str, ok := val.(string)
 	if !ok {
 		return "", fmt.Errorf("parameter '%s' must be a string", key)
 	}
-	
+
 	return str, nil
 }
 
@@ -43,12 +43,12 @@ func GetFloat64Param(req mcp.CallToolRequest, key string, required bool) (float6
 		}
 		return 0, nil
 	}
-	
+
 	f, ok := val.(float64)
 	if !ok {
 		return 0, fmt.Errorf("parameter '%s' must be a number", key)
 	}
-	
+
 	return f, nil
 }
 
@@ -68,11 +68,11 @@ func GetIntParam(req mcp.CallToolRequest, key string, required bool) (int, error
 	if err != nil {
 		return 0, err
 	}
-	
+
 	if f == 0 && !required {
 		return 0, nil
 	}
-	
+
 	return int(f), nil
 }
 
@@ -95,12 +95,12 @@ func GetBoolParam(req mcp.CallToolRequest, key string, required bool) (bool, err
 		}
 		return false, nil
 	}
-	
+
 	b, ok := val.(bool)
 	if !ok {
 		return false, fmt.Errorf("parameter '%s' must be a boolean", key)
 	}
-	
+
 	return b, nil
 }
 
@@ -115,7 +115,7 @@ func GetOptionalBoolParam(req mcp.CallToolRequest, key string) (bool, error) {
 }
 
 // GetMapParam safely extracts a map parameter from the request
-func GetMapParam(req mcp.CallToolRequest, key string, required bool) (map[string]interface{}, error) {
+func GetMapParam(req mcp.CallToolRequest, key string, required bool) (map[string]any, error) {
 	val, exists := req.Params.Arguments[key]
 	if !exists || val == nil {
 		if required {
@@ -123,27 +123,27 @@ func GetMapParam(req mcp.CallToolRequest, key string, required bool) (map[string
 		}
 		return nil, nil
 	}
-	
-	m, ok := val.(map[string]interface{})
+
+	m, ok := val.(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("parameter '%s' must be an object", key)
 	}
-	
+
 	return m, nil
 }
 
 // GetRequiredMapParam is a shorthand for GetMapParam with required=true
-func GetRequiredMapParam(req mcp.CallToolRequest, key string) (map[string]interface{}, error) {
+func GetRequiredMapParam(req mcp.CallToolRequest, key string) (map[string]any, error) {
 	return GetMapParam(req, key, true)
 }
 
 // GetOptionalMapParam is a shorthand for GetMapParam with required=false
-func GetOptionalMapParam(req mcp.CallToolRequest, key string) (map[string]interface{}, error) {
+func GetOptionalMapParam(req mcp.CallToolRequest, key string) (map[string]any, error) {
 	return GetMapParam(req, key, false)
 }
 
 // GetArrayParam safely extracts an array parameter from the request
-func GetArrayParam(req mcp.CallToolRequest, key string, required bool) ([]interface{}, error) {
+func GetArrayParam(req mcp.CallToolRequest, key string, required bool) ([]any, error) {
 	val, exists := req.Params.Arguments[key]
 	if !exists || val == nil {
 		if required {
@@ -151,22 +151,22 @@ func GetArrayParam(req mcp.CallToolRequest, key string, required bool) ([]interf
 		}
 		return nil, nil
 	}
-	
-	arr, ok := val.([]interface{})
+
+	arr, ok := val.([]any)
 	if !ok {
 		return nil, fmt.Errorf("parameter '%s' must be an array", key)
 	}
-	
+
 	return arr, nil
 }
 
 // GetRequiredArrayParam is a shorthand for GetArrayParam with required=true
-func GetRequiredArrayParam(req mcp.CallToolRequest, key string) ([]interface{}, error) {
+func GetRequiredArrayParam(req mcp.CallToolRequest, key string) ([]any, error) {
 	return GetArrayParam(req, key, true)
 }
 
 // GetOptionalArrayParam is a shorthand for GetArrayParam with required=false
-func GetOptionalArrayParam(req mcp.CallToolRequest, key string) ([]interface{}, error) {
+func GetOptionalArrayParam(req mcp.CallToolRequest, key string) ([]any, error) {
 	return GetArrayParam(req, key, false)
 }
 

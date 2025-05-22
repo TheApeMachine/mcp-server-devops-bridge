@@ -72,7 +72,7 @@ func NewQdrantStore(collection string) (*QdrantStore, error) {
 }
 
 // Store saves a text document with metadata to the vector store
-func (store *QdrantStore) Store(ctx context.Context, text string, metadata map[string]interface{}) error {
+func (store *QdrantStore) Store(ctx context.Context, text string, metadata map[string]any) error {
 	waitUpsert := true
 
 	// In a real implementation, we would generate embeddings here
@@ -127,7 +127,7 @@ func (store *QdrantStore) Search(ctx context.Context, query string) ([]string, e
 }
 
 // Delete is a stub implementation to satisfy the interface
-func (store *QdrantStore) Delete(ctx context.Context, filter map[string]interface{}) error {
+func (store *QdrantStore) Delete(ctx context.Context, filter map[string]any) error {
 	// Not implemented in the original code
 	return nil
 }

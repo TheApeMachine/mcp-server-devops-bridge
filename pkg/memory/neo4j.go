@@ -68,7 +68,7 @@ func NewNeo4jStore(url, username, password, dbName string) (*Neo4jStore, error) 
 }
 
 // Execute runs a Cypher query with parameters
-func (store *Neo4jStore) Execute(ctx context.Context, query string, params map[string]interface{}) error {
+func (store *Neo4jStore) Execute(ctx context.Context, query string, params map[string]any) error {
 	session := store.client.NewSession(ctx, sdk.SessionConfig{
 		DatabaseName: store.dbName,
 		AccessMode:   sdk.AccessModeWrite,
