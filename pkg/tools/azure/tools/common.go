@@ -2,9 +2,7 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -12,6 +10,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/microsoft/azure-devops-go-api/azuredevops/v7/webapi"
+	"github.com/microsoft/azure-devops-go-api/azuredevops/v7/work"
 )
 
 // AzureDevOpsConfig contains configuration for Azure DevOps integration
@@ -150,115 +149,77 @@ var FieldMap = map[string]string{
 	"Priority":    "Microsoft.VSTS.Common.Priority",
 }
 
-// Get the current sprint information
-func GetCurrentSprint(ctx context.Context, config AzureDevOpsConfig) (map[string]any, error) {
-	baseURL := fmt.Sprintf("%s/%s/_apis/work/teamsettings/iterations",
-		config.OrganizationURL,
-		config.Project)
+// GetCurrentSprint uses the Azure DevOps SDK to get current sprint information.
+func GetCurrentSprint(ctx context.Context, workClient work.Client, project string, team string) (map[string]any, error) {
+	if workClient == nil {
+		return nil, fmt.Errorf("workClient is nil")
+	}
+	if project == "" {
+		return nil, fmt.Errorf("project is required")
+	}
+	if team == "" {
+		return nil, fmt.Errorf("team is required")
+	}
 
-	queryParams := url.Values{}
-	queryParams.Add("$timeframe", "current")
-	queryParams.Add("api-version", "7.2-preview")
-
-	fullURL := fmt.Sprintf("%s?%s", baseURL, queryParams.Encode())
-
-	// Create request
-	req, err := http.NewRequest("GET", fullURL, nil)
+	iterations, err := workClient.GetTeamIterations(ctx, work.GetTeamIterationsArgs{
+		Project:   &project,
+		Team:      &team,
+		Timeframe: StringPtr("Current"), // SDK uses string pointer for timeframe
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %v", err)
+		return nil, fmt.Errorf("failed to get current sprint iterations using SDK: %w", err)
 	}
 
-	// Add authentication
-	req.SetBasicAuth("", config.PersonalAccessToken)
-
-	// Send request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get current sprint: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get current sprint. Status: %d", resp.StatusCode)
+	if iterations == nil || len(*iterations) == 0 {
+		return nil, fmt.Errorf("no current sprint found for project '%s' and team '%s'", project, team)
 	}
 
-	// Parse response
-	var sprintResponse struct {
-		Value []struct {
-			ID        string    `json:"id"`
-			Name      string    `json:"name"`
-			Path      string    `json:"path"`
-			StartDate time.Time `json:"startDate"`
-			EndDate   time.Time `json:"finishDate"`
-		} `json:"value"`
+	// The first iteration in the "current" timeframe is the current sprint.
+	currentSprint := (*iterations)[0]
+
+	// Ensure attributes and their embedded pointers are not nil before dereferencing
+	var id, name, path, sprintURL, timeFrame string
+	var startDate, endDate time.Time
+
+	if currentSprint.Id != nil {
+		id = currentSprint.Id.String() // Assuming Id is a UUID, convert to string
+	}
+	if currentSprint.Name != nil {
+		name = *currentSprint.Name
+	}
+	if currentSprint.Path != nil {
+		path = *currentSprint.Path
+	}
+	if currentSprint.Url != nil { // This is the API URL of the iteration
+		sprintURL = *currentSprint.Url
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&sprintResponse); err != nil {
-		return nil, fmt.Errorf("failed to parse sprint response: %v", err)
+	// Attributes might contain StartDate and FinishDate
+	if currentSprint.Attributes != nil {
+		if currentSprint.Attributes.StartDate != nil {
+			startDate = currentSprint.Attributes.StartDate.Time
+		}
+		if currentSprint.Attributes.FinishDate != nil {
+			endDate = currentSprint.Attributes.FinishDate.Time
+		}
+		if currentSprint.Attributes.TimeFrame != nil {
+			timeFrame = string(*currentSprint.Attributes.TimeFrame) // TimeFrame is an enum, cast to string
+		}
 	}
 
-	if len(sprintResponse.Value) == 0 {
-		return nil, fmt.Errorf("no active sprint found")
-	}
-
-	currentSprint := sprintResponse.Value[0]
 	return map[string]any{
-		"id":         currentSprint.ID,
-		"name":       currentSprint.Name,
-		"path":       currentSprint.Path,
-		"start_date": currentSprint.StartDate,
-		"end_date":   currentSprint.EndDate,
+		"id":         id,
+		"name":       name,
+		"path":       path,
+		"start_date": startDate, // Return as time.Time
+		"end_date":   endDate,   // Return as time.Time
+		"time_frame": timeFrame,
+		"url":        sprintURL, // API URL for the sprint iteration
 	}, nil
 }
 
 // GetWorkItemURL constructs the UI URL for a work item.
 func GetWorkItemURL(orgURL string, workItemID int) string {
-	// Ensure orgURL doesn't have trailing slashes from config and project isn't part of the base for this URL type
-	// Example: https://dev.azure.com/MyOrg/MyProject/_workitems/edit/123
-	// The _apis/wit/workItems/{id} is the API URL, not the UI one usually needed by users.
-	// Let's assume config.Project is available for the UI URL.
-	// This needs to be confirmed with the actual AzureDevOpsConfig struct if it contains Project.
-	// For now, making a generic UI URL pattern if project name isn't directly available here
-	// or part of the orgURL from config.
-	// A more robust way is to ensure project name is passed or available.
-	// If tool.config.Project is accessible, it should be used.
-	// The common function won't have direct access to tool.config.Project unless passed.
-	// Let's assume orgURL ALREADY contains the organization part e.g. https://dev.azure.com/MyOrg
-	// and we need to append the project and work item path.
-	// THIS FUNCTION MIGHT NEED ACCESS TO THE PROJECT NAME for a full UI URL.
-	// For now, providing a common structure and acknowledging this dependency.
-	// A common structure is: {OrganizationURL}/{Project}/_workitems/edit/{workItemID}
-	// If orgURL = "https://dev.azure.com/MyOrg" and project = "MyProject", then
-	// https://dev.azure.com/MyOrg/MyProject/_workitems/edit/123
-	// This function will assume orgURL is just the org base (e.g. https://dev.azure.com/orgName)
-	// and the project name needs to be sourced elsewhere or this func needs to be in a context with it.
-	// Given this is common, it implies it should be generic.
-	// Let's make it expect the fully qualified org URL (e.g. https://dev.azure.com/myorg)
-	// and the project name separately if this is to be truly common and accurate.
-	// However, the original get_work_items.go used tool.config.OrganizationURL which implies it might contain project context for UI.
-	// Let's use a simpler form that assumes orgURL is the base up to the org.
-	// The `_workitems/edit/ID` path is universal for UI links AFTER project context.
-	// This is tricky for a truly common function without project context.
-	// Reverting to the simpler one from update_work_items.go for consistency for now and will require project in URL path or separate param.
-	// The update_work_items.go uses: fmt.Sprintf("%s/%s/_workitems/edit/%d", strings.TrimRight(orgURL, "/"), "_apis/wit/workItems", id)
-	// which is actually the API URL base. A UI url is more like: {org}/{project}/_workitems/edit/{id}
-	// Let's assume orgURL is the full base URL up to the organization, e.g., https://dev.azure.com/MyOrg
-	// And this function CANNOT know the project. So it can only give a partial piece or the caller forms it.
-	// For now, I will return a more generic API like URL structure, acknowledging it's not the UI URL.
-	// return fmt.Sprintf("%s/_apis/wit/workItems/%d", strings.TrimRight(orgURL, "/"), workItemID)
-	// The previous get_work_items.go had: fmt.Sprintf("%s/_workitems/edit/%d", tool.config.OrganizationURL, id)
-	// This implies tool.config.OrganizationURL was specific enough. If common.go is used, it won't have tool.
-	// Given the user is moving functions here, they must be callable without tool context.
-	// So, this function will need more parameters or a fixed structure based on assumptions.
-
-	// Let's use a simplified version that takes org base and project
-	// This will require the caller (specific tool) to provide these.
-	// For now, let's assume the `orgURL` parameter is the full base up to the project for UI links if possible,
-	// otherwise this common function is less useful for direct UI links.
-	// Based on previous tool code: `fmt.Sprintf("%s/_workitems/edit/%d", tool.config.OrganizationURL, id)`
-	// This means OrganizationURL must be the project specific URL e.g. https://dev.azure.com/MyOrg/MyProject
-	// This is a common pattern for such configs.
 	return fmt.Sprintf("%s/_workitems/edit/%d", strings.TrimRight(orgURL, "/"), workItemID)
 }
 

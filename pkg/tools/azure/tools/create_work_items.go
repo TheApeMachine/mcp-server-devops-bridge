@@ -55,7 +55,7 @@ func NewAzureCreateWorkItemsTool(conn *azuredevops.Connection, config AzureDevOp
 		mcp.WithString(
 			"items_json",
 			mcp.Required(),
-			mcp.Description("A JSON string representing an array of work items to create. Each item object should define 'type', 'title', and optionally 'description', 'state', 'priority', 'parent_id', 'assigned_to', 'iteration', 'area', 'tags', and 'custom_fields' (as a map)."),
+			mcp.Description("A JSON string representing an array of work items to create. Each item object should define 'type', 'title', and optionally 'description' (using HTML, not Markdown), 'state', 'priority', 'parent_id', 'assigned_to', 'iteration', 'area', 'tags', and 'custom_fields' (as a map)."),
 		),
 		mcp.WithString("format", mcp.Description("Response format: 'text' (default) or 'json'")),
 	)

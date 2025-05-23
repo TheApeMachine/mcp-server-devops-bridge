@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/microsoft/azure-devops-go-api/azuredevops/v7"
@@ -87,15 +88,24 @@ func (tool *AzureSprintOverviewTool) Handler(ctx context.Context, request mcp.Ca
 	// 1. Get Sprint Details
 	if sprintIdentifier == "" || strings.ToLower(sprintIdentifier) == "@currentiteration" {
 		// Get current sprint details
-		currentSprintData, err := GetCurrentSprint(ctx, tool.config) // Assumes GetCurrentSprint exists and returns map[string]any
+		currentSprintData, err := GetCurrentSprint(ctx, tool.workClient, tool.config.Project, tool.config.Team) // Updated call
 		if err != nil {
 			return HandleError(err, "Failed to get current sprint details"), nil
 		}
 		sprintDetailsOutput.Name = currentSprintData["name"].(string)
 		sprintDetailsOutput.IterationPath = currentSprintData["path"].(string)
-		sprintDetailsOutput.StartDate = currentSprintData["start_date"].(string)
-		sprintDetailsOutput.EndDate = currentSprintData["end_date"].(string)
-		sprintDetailsOutput.TimeFrame = currentSprintData["time_frame"].(string)
+		if startDate, ok := currentSprintData["start_date"].(time.Time); ok {
+			sprintDetailsOutput.StartDate = startDate.Format("2006-01-02")
+		}
+		if endDate, ok := currentSprintData["end_date"].(time.Time); ok {
+			sprintDetailsOutput.EndDate = endDate.Format("2006-01-02")
+		}
+		// Assuming time_frame might also be time.Time, adjust if it's a different type or format.
+		if timeFrame, ok := currentSprintData["time_frame"].(time.Time); ok {
+			sprintDetailsOutput.TimeFrame = timeFrame.Format("2006-01-02") // Or a more suitable format
+		} else if timeFrameStr, ok := currentSprintData["time_frame"].(string); ok {
+			sprintDetailsOutput.TimeFrame = timeFrameStr
+		}
 		// ID and URL might not be in GetCurrentSprint's map, may need separate fetch or be part of its return.
 		// For now, we prioritize path for the query.
 		iterationPathForQuery = sprintDetailsOutput.IterationPath
@@ -238,13 +248,6 @@ func (tool *AzureSprintOverviewTool) Handler(ctx context.Context, request mcp.Ca
 		}
 	}
 
-	// Attempt to get Sprint Goal if available (this is often a custom field or separate API)
-	// For now, this is a placeholder. If a standard way to get sprint goal is found, implement here.
-	// sprintGoal, err := GetSprintGoal(ctx, tool.workClient, tool.config.Project, tool.config.Team, sprintDetailsOutput.IterationPath)
-	// if err == nil && sprintGoal != "" {
-	// 	overview.Goal = sprintGoal
-	// }
-
 	// 4. Format Output
 	if strings.ToLower(format) == "json" {
 		jsonBytes, err := json.MarshalIndent(overview, "", "  ")
@@ -306,27 +309,3 @@ func (tool *AzureSprintOverviewTool) Handler(ctx context.Context, request mcp.Ca
 
 	return mcp.NewToolResultText(strings.Join(textOutput, "\n")), nil
 }
-
-// GetCurrentSprint is a placeholder for the actual function that would fetch current sprint details.
-// It should ideally return a structure or a map with "id", "name", "path", "start_date", "end_date", "time_frame", "url".
-// func GetCurrentSprint(ctx context.Context, config AzureDevOpsConfig) (map[string]any, error) {
-// This function would use the work.Client to get team settings and current iteration.
-// Example (conceptual, actual API calls might differ slightly):
-// teamSettings, err := workClient.GetTeamSettings(ctx, work.GetTeamSettingsArgs{Project: &config.Project, Team: &config.Team})
-// if err != nil { return nil, err }
-// iterationPath := *teamSettings.DefaultIteration.Path
-// iterations, err := workClient.GetTeamIterations(ctx, work.GetTeamIterationsArgs{Project: &config.Project, Team: &config.Team, Timeframe: StringPtr("current")})
-// if err != nil || len(*iterations) == 0 { return nil, fmt.Errorf("could not get current iteration details") }
-// currentIter := (*iterations)[0]
-// return map[string]any{
-// 	"id": (*currentIter.Id).String(),
-//	"name": *currentIter.Name,
-//	"path": *currentIter.Path,
-//	"start_date": (*currentIter.Attributes.StartDate).Time.Format("2006-01-02"),
-//	"end_date": (*currentIter.Attributes.FinishDate).Time.Format("2006-01-02"),
-//	"time_frame": string(*currentIter.Attributes.TimeFrame),
-//  "url": *currentIter.Url,
-// }, nil
-// }
-
-// Note: SafeString, GetStringArg, HandleError are assumed to be in common.go

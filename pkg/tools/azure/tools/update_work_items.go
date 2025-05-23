@@ -58,11 +58,11 @@ func NewAzureUpdateWorkItemsTool(conn *azuredevops.Connection, config AzureDevOp
 
 	tool.handle = mcp.NewTool(
 		"azure_update_work_items",
-		mcp.WithDescription("Update one or more work items in Azure DevOps. Supports updating various fields, adding comments, and managing relationships."),
+		mcp.WithDescription("Update one or more work items in Azure DevOps. Supports updating various fields, adding comments (HTML, not Markdown), and managing relationships."),
 		mcp.WithString(
 			"items_to_update_json",
 			mcp.Required(),
-			mcp.Description("A JSON string representing an array of work items to update. Each item object must have an 'id' (integer) and 'fields_to_update' (map of field names to new values). Optionally, include 'comment' (string) to add a comment, 'add_relations' (array of relation links), or 'remove_relations' (array of relation identifiers)."),
+			mcp.Description("A JSON string representing an array of work items to update. Each item object must have an 'id' (integer) and 'fields_to_update' (map of field names to new values). Optionally, include 'comment' (HTML string, not Markdown) to add a comment, 'add_relations' (array of relation links), or 'remove_relations' (array of relation identifiers)."),
 		),
 		mcp.WithString("format", mcp.Description("Response format: 'text' (default) or 'json'")),
 	)

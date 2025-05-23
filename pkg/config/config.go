@@ -21,11 +21,13 @@ type Config struct {
 	// GitHub configuration
 	GitHub struct {
 		PersonalAccessToken string
+		Organization        string
 	}
 
 	// Slack configuration
 	Slack struct {
 		BotToken       string
+		UserToken      string
 		DefaultChannel string
 	}
 
@@ -57,6 +59,14 @@ type Config struct {
 		SearchWebhookURL string
 		ReplyWebhookURL  string
 	}
+
+	// Sentry configuration
+	Sentry struct {
+		DSN                string
+		AuthToken          string
+		Organization       string
+		DefaultProjectSlug string
+	}
 }
 
 var (
@@ -85,9 +95,11 @@ func Load() *Config {
 
 		// GitHub
 		config.GitHub.PersonalAccessToken = os.Getenv("GITHUB_PAT")
+		config.GitHub.Organization = os.Getenv("GITHUB_ORG")
 
 		// Slack
 		config.Slack.BotToken = os.Getenv("SLACK_BOT_TOKEN")
+		config.Slack.UserToken = os.Getenv("SLACK_USER_TOKEN")
 		config.Slack.DefaultChannel = os.Getenv("DEFAULT_SLACK_CHANNEL")
 
 		// Memory - Qdrant
@@ -110,6 +122,15 @@ func Load() *Config {
 		config.Email.InboxWebhookURL = os.Getenv("EMAIL_INBOX_WEBHOOK_URL")
 		config.Email.SearchWebhookURL = os.Getenv("EMAIL_SEARCH_WEBHOOK_URL")
 		config.Email.ReplyWebhookURL = os.Getenv("EMAIL_REPLY_WEBHOOK_URL")
+
+		// Sentry
+		config.Sentry.DSN = os.Getenv("SENTRY_DSN")
+		config.Sentry.AuthToken = os.Getenv("SENTRY_AUTH_TOKEN")
+		config.Sentry.Organization = os.Getenv("SENTRY_ORG")
+		config.Sentry.DefaultProjectSlug = os.Getenv("SENTRY_PROJECT_SLUG")
+
+		config.GitHub.PersonalAccessToken = os.Getenv("GITHUB_PAT")
+		config.GitHub.Organization = os.Getenv("GITHUB_ORG")
 	})
 
 	return config

@@ -10,15 +10,17 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/microsoft/azure-devops-go-api/azuredevops/v7"
+	"github.com/microsoft/azure-devops-go-api/azuredevops/v7/work"
 	"github.com/microsoft/azure-devops-go-api/azuredevops/v7/workitemtracking"
 	"github.com/theapemachine/mcp-server-devops-bridge/core"
 )
 
 // AzureSprintItemsTool provides functionality to find work items in the current sprint
 type AzureSprintItemsTool struct {
-	handle mcp.Tool
-	client workitemtracking.Client
-	config AzureDevOpsConfig
+	handle         mcp.Tool
+	trackingClient workitemtracking.Client
+	workClient     work.Client
+	config         AzureDevOpsConfig
 }
 
 // SprintWorkItemOutput defines the structure for work item details for output.
@@ -35,14 +37,22 @@ type SprintWorkItemOutput struct {
 
 // NewAzureSprintItemsTool creates a new tool instance for finding items in the current sprint
 func NewAzureSprintItemsTool(conn *azuredevops.Connection, config AzureDevOpsConfig) core.Tool {
-	client, err := workitemtracking.NewClient(context.Background(), conn)
+	tClient, err := workitemtracking.NewClient(context.Background(), conn)
 	if err != nil {
+		fmt.Printf("Error creating workitemtracking client for AzureSprintItemsTool: %v\n", err)
+		return nil
+	}
+
+	wClient, err := work.NewClient(context.Background(), conn)
+	if err != nil {
+		fmt.Printf("Error creating work client for AzureSprintItemsTool: %v\n", err)
 		return nil
 	}
 
 	tool := &AzureSprintItemsTool{
-		client: client,
-		config: config,
+		trackingClient: tClient,
+		workClient:     wClient,
+		config:         config,
 	}
 
 	tool.handle = mcp.NewTool(
@@ -154,12 +164,13 @@ func (tool *AzureSprintItemsTool) Handler(ctx context.Context, request mcp.CallT
 	teamID := tool.config.Team // Team ID for @CurrentIteration context
 
 	if iterationPath == "" {
-		sprintInfo, err := GetCurrentSprint(ctx, tool.config) // Assumes GetCurrentSprint returns map[string]any
+		// Pass the workClient to GetCurrentSprint
+		sprintInfo, err := GetCurrentSprint(ctx, tool.workClient, tool.config.Project, tool.config.Team)
 		if err != nil {
 			return HandleError(err, "Failed to get current sprint details when iteration_path is not specified"), nil
 		}
-		sprintNameForQuery = "@CurrentIteration"
-		sprintDetailsForOutput = sprintInfo
+		sprintNameForQuery = "@CurrentIteration" // Query still uses @CurrentIteration macro
+		sprintDetailsForOutput = sprintInfo      // This now contains time.Time objects for dates
 	} else {
 		sprintNameForQuery = iterationPath
 		// When a specific iteration_path is given, we might not have full start/end date details easily
@@ -259,7 +270,7 @@ func (tool *AzureSprintItemsTool) Handler(ctx context.Context, request mcp.CallT
 		wiqlArgs.Top = &top
 	}
 
-	queryResult, err := tool.client.QueryByWiql(ctx, wiqlArgs)
+	queryResult, err := tool.trackingClient.QueryByWiql(ctx, wiqlArgs)
 	if err != nil {
 		return HandleError(err, "Failed to query work items"), nil
 	}
@@ -267,15 +278,22 @@ func (tool *AzureSprintItemsTool) Handler(ctx context.Context, request mcp.CallT
 	// If no items found, return a helpful message
 	if len(*queryResult.WorkItems) == 0 {
 		message := fmt.Sprintf("No work items found in sprint: %s", sprintNameForQuery)
-		if iterationPath == "" && sprintDetailsForOutput != nil {
+		if iterationPath == "" && sprintDetailsForOutput != nil && sprintDetailsForOutput["name"] != nil {
 			endDateStr := "unknown"
 			startDateStr := "unknown"
-			if sprintDetailsForOutput["start_date"] != nil {
-				startDateStr = sprintDetailsForOutput["start_date"].(time.Time).Format("2006-01-02")
+
+			if dateVal, ok := sprintDetailsForOutput["start_date"].(time.Time); ok && !dateVal.IsZero() {
+				startDateStr = dateVal.Format("2006-01-02")
+			} else if strVal, ok := sprintDetailsForOutput["start_date"].(string); ok { // Fallback if already string
+				startDateStr = strVal
 			}
-			if sprintDetailsForOutput["end_date"] != nil {
-				endDateStr = sprintDetailsForOutput["end_date"].(time.Time).Format("2006-01-02")
+
+			if dateVal, ok := sprintDetailsForOutput["end_date"].(time.Time); ok && !dateVal.IsZero() {
+				endDateStr = dateVal.Format("2006-01-02")
+			} else if strVal, ok := sprintDetailsForOutput["end_date"].(string); ok { // Fallback if already string
+				endDateStr = strVal
 			}
+
 			message = fmt.Sprintf("No work items found in the current sprint: %s (%s to %s).",
 				sprintDetailsForOutput["name"], startDateStr, endDateStr)
 		}
@@ -289,7 +307,7 @@ func (tool *AzureSprintItemsTool) Handler(ctx context.Context, request mcp.CallT
 	}
 
 	// Get details of the work items
-	workItems, err := tool.client.GetWorkItems(ctx, workitemtracking.GetWorkItemsArgs{
+	workItems, err := tool.trackingClient.GetWorkItems(ctx, workitemtracking.GetWorkItemsArgs{
 		Ids:     &ids,
 		Project: &tool.config.Project,
 		Expand:  &workitemtracking.WorkItemExpandValues.Relations,

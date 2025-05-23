@@ -79,6 +79,8 @@ func NewAzureProvider() *AzureProvider {
 	provider.registerTool(tools.NewAzureUpdateWorkItemsTool(conn, toolsConfig))
 	provider.registerTool(tools.NewAzureExecuteWiqlTool(conn, toolsConfig))
 	provider.registerTool(tools.NewAzureSearchWorkItemsTool(conn, toolsConfig))
+	provider.registerTool(tools.NewAzureEnrichWorkItemTool(conn, toolsConfig))
+	provider.registerTool(tools.NewAzureGetGitHubFileContentTool())
 
 	wikiTool := NewWikiTool(conn, config)
 	if wikiTool != nil {
