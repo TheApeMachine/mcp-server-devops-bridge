@@ -7,6 +7,7 @@ import (
 	"github.com/microsoft/azure-devops-go-api/azuredevops/v7"
 	"github.com/theapemachine/mcp-server-devops-bridge/core"
 	"github.com/theapemachine/mcp-server-devops-bridge/pkg/tools/azure/tools"
+	"github.com/theapemachine/mcp-server-devops-bridge/pkg/tools/slack"
 )
 
 type AzureDevOpsConfig struct {
@@ -87,6 +88,14 @@ func NewAzureProvider() *AzureProvider {
 		provider.Tools["wiki"] = wikiTool
 	} else {
 		log.Println("Warning: Failed to initialize Wiki tool")
+	}
+
+	// Register Slack tool
+	slackTool := slack.NewSlackPostMessageTool()
+	if slackTool != nil {
+		provider.registerTool(slackTool)
+	} else {
+		log.Println("Warning: Failed to initialize Slack tool, SLACK_WEBHOOK_URL might not be set.")
 	}
 
 	return provider
