@@ -27,7 +27,7 @@ The MCP server comes packed with a rich set of tools, organized into providers:
 
 ### Extensible Agent System
 
-- **Agents-in-Agents** Have your AI agent (MCP client) create its own agents, and manage them. Each agent has access to a docker container running a Debian Linux system, is able to work iteratively, and can communicate with other agents.
+- **Agents-in-Agents** Have your AI agent (MCP client) create its own agents, and manage them. Each agent has access to a docker container running a Debian Linux system, a web browser, is able to work iteratively, and can communicate with other agents.
 
 ## 🛠️ Getting Started
 

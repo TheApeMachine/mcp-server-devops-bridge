@@ -103,6 +103,8 @@ func NewLaunchAgentTool(manager *AgentManager) core.Tool {
 		mcp.WithDescription("Launches a new agent with a given system and user prompt."),
 		mcp.WithString("system_prompt", mcp.Required(), mcp.Description("The system prompt for the agent.")),
 		mcp.WithString("user_prompt", mcp.Required(), mcp.Description("The initial user prompt or task for the agent.")),
+		mcp.WithNumber("temperature", mcp.Description("Controls creativity. Value between 0 and 2. Defaults to 1.")),
+		mcp.WithNumber("max_iterations", mcp.Description("The maximum number of iterations the agent can perform. Defaults to 10.")),
 	)
 	return t
 }
@@ -119,12 +121,25 @@ func (t *LaunchAgentTool) Handler(ctx context.Context, request mcp.CallToolReque
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	temperature, err := GetNumberArg(request, "temperature")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	temperature := 1.0
+	if tempVal, ok := request.Params.Arguments["temperature"]; ok {
+		if temp, isFloat := tempVal.(float64); isFloat {
+			temperature = temp
+		} else {
+			return mcp.NewToolResultError("invalid type for 'temperature', expected number"), nil
+		}
 	}
 
-	agent, err := t.manager.LaunchAgent(systemPrompt, userPrompt, temperature)
+	maxIterations := 10
+	if iterVal, ok := request.Params.Arguments["max_iterations"]; ok {
+		if iter, isFloat := iterVal.(float64); isFloat { // JSON numbers are float64
+			maxIterations = int(iter)
+		} else {
+			return mcp.NewToolResultError("invalid type for 'max_iterations', expected integer"), nil
+		}
+	}
+
+	agent, err := t.manager.LaunchAgent(systemPrompt, userPrompt, temperature, maxIterations)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -313,8 +328,7 @@ func NewBulkManageAgentsTool(manager *AgentManager) core.Tool {
 	t.handle = mcp.NewTool(
 		"bulkManageAgents",
 		mcp.WithDescription("Sends a batch of instructions to multiple agents in a single request. Can be used to launch, instruct, or shut down agents."),
-		mcp.WithString("operations", mcp.Required(), mcp.Description("A JSON string representing an array of operations. Each operation is an object with 'action' ('launch', 'instruct', or 'shutdown'), 'agent_id' (for instruct/shutdown), and prompts (for launch/instruct).")),
-		mcp.WithNumber("temperature", mcp.Required(), mcp.Description("The temperature for the agents.")),
+		mcp.WithString("operations", mcp.Required(), mcp.Description("A JSON string representing an array of operations. Each operation is an object with 'action' ('launch', 'instruct', or 'shutdown'), 'agent_id' (for instruct/shutdown), and other parameters.")),
 	)
 	return t
 }
@@ -329,11 +343,12 @@ func (t *BulkManageAgentsTool) Handler(ctx context.Context, request mcp.CallTool
 	}
 
 	type operation struct {
-		Action       string  `json:"action"`
-		AgentID      string  `json:"agent_id,omitempty"`
-		Prompt       string  `json:"prompt,omitempty"`
-		SystemPrompt string  `json:"system_prompt,omitempty"`
-		Temperature  float64 `json:"temperature,omitempty"`
+		Action        string  `json:"action"`
+		AgentID       string  `json:"agent_id,omitempty"`
+		Prompt        string  `json:"prompt,omitempty"`
+		SystemPrompt  string  `json:"system_prompt,omitempty"`
+		Temperature   float64 `json:"temperature,omitempty"`
+		MaxIterations int     `json:"max_iterations,omitempty"`
 	}
 
 	var ops []operation
@@ -346,9 +361,18 @@ func (t *BulkManageAgentsTool) Handler(ctx context.Context, request mcp.CallTool
 		var result string
 		switch op.Action {
 		case "launch":
+			temp := op.Temperature
+			if temp == 0 { // If not provided in JSON, it will be the zero value
+				temp = 1.0
+			}
+			iters := op.MaxIterations
+			if iters == 0 {
+				iters = 10
+			}
+
 			if op.Prompt == "" || op.SystemPrompt == "" {
 				result = "Launch op: FAILED - 'prompt' and 'system_prompt' are required for 'launch' action."
-			} else if agent, err := t.manager.LaunchAgent(op.SystemPrompt, op.Prompt, op.Temperature); err != nil {
+			} else if agent, err := t.manager.LaunchAgent(op.SystemPrompt, op.Prompt, temp, iters); err != nil {
 				result = fmt.Sprintf("Launch op: FAILED - %v", err)
 			} else {
 				result = fmt.Sprintf("Launch op: SUCCESS - Agent launched with ID: %s", agent.ID)
