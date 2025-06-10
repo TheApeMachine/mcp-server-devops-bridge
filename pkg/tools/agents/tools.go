@@ -32,6 +32,26 @@ func GetStringArg(req mcp.CallToolRequest, key string) (string, error) {
 	return str, nil
 }
 
+func GetNumberArg(req mcp.CallToolRequest, key string) (float64, error) {
+	var (
+		val any
+		num float64
+		ok  bool
+	)
+
+	if val, ok = req.Params.Arguments[key]; !ok {
+		return 0, fmt.Errorf("missing argument: %s", key)
+	}
+
+	num, ok = val.(float64)
+
+	if !ok {
+		return 0, fmt.Errorf("argument %s is not a number", key)
+	}
+
+	return num, nil
+}
+
 // AgentProvider provides the set of tools for agent management.
 type AgentProvider struct {
 	Tools map[string]core.Tool
@@ -99,7 +119,12 @@ func (t *LaunchAgentTool) Handler(ctx context.Context, request mcp.CallToolReque
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	agent, err := t.manager.LaunchAgent(systemPrompt, userPrompt)
+	temperature, err := GetNumberArg(request, "temperature")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	agent, err := t.manager.LaunchAgent(systemPrompt, userPrompt, temperature)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -289,6 +314,7 @@ func NewBulkManageAgentsTool(manager *AgentManager) core.Tool {
 		"bulkManageAgents",
 		mcp.WithDescription("Sends a batch of instructions to multiple agents in a single request. Can be used to launch, instruct, or shut down agents."),
 		mcp.WithString("operations", mcp.Required(), mcp.Description("A JSON string representing an array of operations. Each operation is an object with 'action' ('launch', 'instruct', or 'shutdown'), 'agent_id' (for instruct/shutdown), and prompts (for launch/instruct).")),
+		mcp.WithNumber("temperature", mcp.Required(), mcp.Description("The temperature for the agents.")),
 	)
 	return t
 }
@@ -303,10 +329,11 @@ func (t *BulkManageAgentsTool) Handler(ctx context.Context, request mcp.CallTool
 	}
 
 	type operation struct {
-		Action       string `json:"action"`
-		AgentID      string `json:"agent_id,omitempty"`
-		Prompt       string `json:"prompt,omitempty"`
-		SystemPrompt string `json:"system_prompt,omitempty"`
+		Action       string  `json:"action"`
+		AgentID      string  `json:"agent_id,omitempty"`
+		Prompt       string  `json:"prompt,omitempty"`
+		SystemPrompt string  `json:"system_prompt,omitempty"`
+		Temperature  float64 `json:"temperature,omitempty"`
 	}
 
 	var ops []operation
@@ -321,7 +348,7 @@ func (t *BulkManageAgentsTool) Handler(ctx context.Context, request mcp.CallTool
 		case "launch":
 			if op.Prompt == "" || op.SystemPrompt == "" {
 				result = "Launch op: FAILED - 'prompt' and 'system_prompt' are required for 'launch' action."
-			} else if agent, err := t.manager.LaunchAgent(op.SystemPrompt, op.Prompt); err != nil {
+			} else if agent, err := t.manager.LaunchAgent(op.SystemPrompt, op.Prompt, op.Temperature); err != nil {
 				result = fmt.Sprintf("Launch op: FAILED - %v", err)
 			} else {
 				result = fmt.Sprintf("Launch op: SUCCESS - Agent launched with ID: %s", agent.ID)

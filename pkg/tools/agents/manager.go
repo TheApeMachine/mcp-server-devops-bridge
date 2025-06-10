@@ -38,6 +38,7 @@ type Agent struct {
 	SystemPrompt string
 	Messages     []openai.ChatCompletionMessageParamUnion
 	Result       string // The latest result from the agent
+	Temperature  float64
 	taskChan     chan string
 	shutdownChan chan struct{}
 }
@@ -74,7 +75,7 @@ func NewAgentManager() (*AgentManager, error) {
 }
 
 // LaunchAgent creates a new agent, starts its execution loop, and creates a docker container.
-func (m *AgentManager) LaunchAgent(systemPrompt, userPrompt string) (*Agent, error) {
+func (m *AgentManager) LaunchAgent(systemPrompt, userPrompt string, temperature float64) (*Agent, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -112,6 +113,7 @@ When the entire task is finished, use the 'complete_task' tool.`
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage(userPrompt),
 		},
+		Temperature:  temperature,
 		taskChan:     make(chan string),
 		shutdownChan: make(chan struct{}),
 	}
@@ -228,9 +230,10 @@ func (m *AgentManager) runAgent(agent *Agent) {
 		}
 
 		params := openai.ChatCompletionNewParams{
-			Model:    openai.ChatModelGPT4o,
-			Messages: append([]openai.ChatCompletionMessageParamUnion{openai.SystemMessage(agent.SystemPrompt)}, agent.Messages...),
-			Tools:    tools,
+			Model:       openai.ChatModelGPT4o,
+			Messages:    append([]openai.ChatCompletionMessageParamUnion{openai.SystemMessage(agent.SystemPrompt)}, agent.Messages...),
+			Tools:       tools,
+			Temperature: openai.Opt[float64](agent.Temperature),
 		}
 
 		completion, err := m.openaiCli.Chat.Completions.New(context.Background(), params)
