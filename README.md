@@ -1,93 +1,137 @@
 # 🚀 MCP Server Multi Tools 🌉
 
-Welcome to the **MCP Server Multi Tools**! This powerful service acts as a seamless integration layer, connecting a standardized **Model Context Protocol (MCP)** interface with a wide array of essential DevOps and communication tools.
+> [!NOTE]
+> **Model Context Protocol (MCP) Bridge** - A powerful service that connects AI agents with DevOps and communication tools through a standardized interface.
 
-It enables AI agents and other systems to interact with services like **Azure DevOps**, **Slack**, **GitHub**, and even **Other Agents** using a simple, unified protocol. This bridge empowers developers to build sophisticated automation and AI-driven workflows without getting bogged down by the complexities of individual service APIs.
+Welcome to the **MCP Server Multi Tools**! This service acts as a seamless integration layer, enabling AI agents and systems to interact with services like **Azure DevOps**, **Slack**, **GitHub**, and even **other agents (with their own tools)** using a simple, unified protocol.
 
-## ✨ Features
+---
 
-The MCP server comes packed with a rich set of tools, organized into providers:
+## 🛠️ Available Tools & Providers
 
-### DevOps & Productivity
+### 📊 **DevOps & Project Management**
 
-- **Azure DevOps**: A comprehensive suite of tools for total project management.
-  - **Work Items**: Create, read, update, search, and comment on work items.
-  - **Sprints**: Manage sprints, view their contents, and get overviews of progress.
-  - **WIQL**: Execute custom Work Item Query Language statements.
-  - **Enrichment**: Augment work items with context from GitHub, Slack, and Sentry.
-  - **Git Content**: Fetch file content directly from associated GitHub repositories.
+A comprehensive suite for total project management:
 
-- **GitHub**:
-  - Seamlessly integrate with your version control and pull request workflows.
+- **📝 Work Items**: Create, read, update, search, and comment
+- **🏃‍♂️ Sprints**: Manage sprints, view contents, and track progress  
+- **🔍 WIQL**: Execute custom Work Item Query Language statements
+- **🔗 Enrichment**: Augment work items with GitHub, Slack, and Sentry context
+- **📁 Git Content**: Fetch file content from associated repositories
 
-### Communication
+### 🐙 GitHub Integration
 
-- **Slack**:
-  - Post messages to any channel, enabling real-time notifications and agent communication.
+- Seamless version control and pull request workflows
+- Repository content access and management
 
-### Extensible Agent System
+### 💬 **Communication**
 
-- **Agents-in-Agents** Have your AI agent (MCP client) create its own agents, and manage them. Each agent has access to a docker container running a Debian Linux system, a web browser, is able to work iteratively, and can communicate with other agents.
+- Real-time notifications and messaging
+- Channel posting for agent communication
+- Team collaboration enhancement
 
-## 🛠️ Getting Started
+### 🤖 **Advanced Agent System**
 
-### Prerequisites
+> [!IMPORTANT]
+> **Agents-in-Agents**: Revolutionary nested agent architecture
 
-- [Go](https://go.dev/doc/install) (latest version recommended)
-- Access tokens and credentials for the services you want to integrate (Azure DevOps, Slack, etc.).
-- Docker (Desktop) installed and running (for the agents-in-agents feature).
+**Your AI agent can create and manage other agents**, each with:
 
-### 1. Clone the Repository
+- 🐋 **Docker container** with full Debian Linux system
+- 🌐 **Web browser** capabilities  
+- 🔄 **Iterative work** processes
+- 💬 **Inter-agent communication**
+
+---
+
+## 🚀 Quick Start Guide
+
+### 📋 Prerequisites
+
+> [!WARNING]
+> Ensure you have the following before proceeding:
+
+- ✅ [Go](https://go.dev/doc/install) (latest version)
+- 🔑 Service credentials (Azure DevOps, Slack tokens, etc.)
+- 🐳 Docker Desktop (for agents-in-agents feature)
+
+### Step 1️⃣: **Clone & Build**
 
 ```bash
+# Clone the repository
 git clone https://github.com/theapemachine/mcp-server-multi-tools.git
 cd mcp-server-devops-bridge
-```
 
-Don't forget to actually build the server.
-
-```bash
+# Build the server
 go build -o mcp-server-multi-tools .
 ```
 
-### 2. Configure Environment Variables
-
-The server is configured entirely through environment variables. Copy the example script and fill in your credentials.
+### Step 2️⃣: **Environment Setup**
 
 ```bash
+# Copy and configure environment variables
 cp start.sh.example start.sh
-vim start.sh # Or use your favorite editor
+vim start.sh  # Add your credentials
 ```
 
-### 3. Add MCP Configuration
+> [!TIP]
+> The server is configured entirely through environment variables for maximum flexibility.
 
-The example below is how to add the MCP server to Claude Desktop.
+### Step 3️⃣: **MCP Client Configuration**
+
+Add to your Claude Desktop configuration:
 
 ```json
-"mcpServers": {
+{
+  "mcpServers": {
     "multi-tools": {
-        "command": "/path/to/mcp-server-multi-tools/start.sh",
-        "args": [],
+      "command": "/path/to/mcp-server-multi-tools/start.sh",
+      "args": []
     }
+  }
 }
 ```
 
-## 🤖 Example in Action: AI-Powered Development
+---
 
-Here's a glimpse of an AI agent (Claude Sonnet 4) leveraging the bridge to develop a Python program. The agent uses the provided tools to understand requirements, manage tasks, and write code, all orchestrated through the MCP server.
+## 🎬 **See It In Action**
 
-![agents.png](./agents.png)
+> [!NOTE]
+> **Real AI Development Workflow** - Watch Claude Sonnet 4 leverage the bridge to understand requirements, manage tasks, and write code.
+
+![AI Agent Development Example](./agents.png)
+
+*The agent uses MCP tools to orchestrate complex development workflows through a single, unified interface.*
+
+For a complete history of testing, including the upgraded communication system and the headless browser tool, see [agents-full.pdf](./agents-full.pdf).
+
+---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Whether it's adding a new tool, improving documentation, or fixing a bug, please feel free to open a pull request.
+We welcome contributions! Here's how to get involved:
 
-1. **Fork** the repository.
-2. Create your **feature branch** (`git checkout -b feature/AmazingFeature`).
-3. **Commit** your changes (`git commit -m 'Add some AmazingFeature'`).
-4. **Push** to the branch (`git push origin feature/AmazingFeature`).
-5. Open a **Pull Request**.
+### 🔄 **Contribution Workflow**
 
-## 📄 License
+1. **🍴 Fork** the repository
+2. **🌿 Branch** your feature (`git checkout -b feature/AmazingFeature`)  
+3. **💾 Commit** your changes (`git commit -m 'Add AmazingFeature'`)
+4. **🚀 Push** to branch (`git push origin feature/AmazingFeature`)
+5. **📬 Open** a Pull Request
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### 💡 **What We're Looking For**
+
+- 🔧 New tool integrations
+- 📚 Documentation improvements  
+- 🐛 Bug fixes and optimizations
+- 🎨 UI/UX enhancements
+
+---
+
+## 📜 License
+
+**MIT License** - See [LICENSE](LICENSE) for details
+
+---
+
+*Built with 🤷 for the developer community*
