@@ -1,41 +1,30 @@
 #!/bin/bash
 
 # Azure DevOps Configuration
-export AZURE_DEVOPS_ORG="<your-azure-devops-org>"
-export AZDO_PAT="<your-azure-devops-pat>"
-export AZURE_DEVOPS_PROJECT="<your-azure-devops-project>"
-export AZURE_DEVOPS_TEAM="<your-azure-devops-team>"
+export AZURE_DEVOPS_ORG="<YOUR AZURE DEVOPS ORG>"
+export AZDO_PAT="<YOUR AZURE DEVOPS PAT>"
+export AZURE_DEVOPS_PROJECT="<YOUR AZURE DEVOPS PROJECT>"
+export AZURE_DEVOPS_TEAM="<YOUR AZURE DEVOPS TEAM>"
 
 # GitHub Configuration
-export GITHUB_PAT="<your-github-pat>"
+export GITHUB_PAT="<YOUR GITHUB PAT>"
+export GITHUB_ORG="<YOUR GITHUB ORG>"
 
 # Slack Configuration
-export SLACK_BOT_TOKEN="<your-slack-bot-token>"
-export DEFAULT_SLACK_CHANNEL="<your-slack-channel>"
-
-# N8N Configuration
-export N8N_BASE_URL="<your-n8n-base-url>"
-export N8N_API_KEY="<your-n8n-api-key>"
+export SLACK_BOT_TOKEN="<YOUR SLACK BOT TOKEN>"
+export SLACK_USER_TOKEN="<YOUR SLACK USER TOKEN>"
+export DEFAULT_SLACK_CHANNEL="<YOUR DEFAULT SLACK CHANNEL>"
 
 # OpenAI Configuration
-export OPENAI_API_KEY="<your-openai-api-key>"
+export OPENAI_API_KEY="<YOUR OPENAI API KEY>"
 
-# Qdrant Configuration
-export QDRANT_URL="<your-qdrant-url>"
-export QDRANT_API_KEY="<your-qdrant-api-key>"
+export SENTRY_AUTH_TOKEN="<YOUR SENTRY AUTH TOKEN>"
+export SENTRY_ORG="<YOUR SENTRY ORG>"
+export SENTRY_PROJECT_IDS="<YOUR SENTRY PROJECT IDS COMMA SEPARATED>"
+export SENTRY_PROJECT_NAMES="<YOUR SENTRY PROJECT NAMES COMMA SEPARATED>"
 
-# Neo4j Configuration
-export NEO4J_URL="<your-neo4j-url>"
-export NEO4J_USER="<your-neo4j-user>"
-export NEO4J_PASSWORD="<your-neo4j-password>"
+# Path to the MCP Server executable
+export MCP_SERVER_PATH="<path-to-mcp-server-multi-tools>"
 
-# Email Configuration (if using email features)
-export EMAIL_INBOX_WEBHOOK_URL="<your-email-inbox-webhook-url>"
-export EMAIL_SEARCH_WEBHOOK_URL="<your-email-search-webhook-url>"
-export EMAIL_REPLY_WEBHOOK_URL="<your-email-reply-webhook-url>"
-
-# Path to the MCP Server DevOps Bridge executable
-export MCP_SERVER_DEVOPS_BRIDGE_PATH="<path-to-mcp-server-devops-bridge>"
-
-# Run the MCP Server DevOps Bridge
-$MCP_SERVER_DEVOPS_BRIDGE_PATH
+# Run the MCP Server
+$MCP_SERVER_PATH

@@ -52,7 +52,6 @@ type AzureGetWorkItemsTool struct { // Renamed from AzureGetWorkItemTool
 func NewAzureGetWorkItemsTool(conn *azuredevops.Connection, config AzureDevOpsConfig) core.Tool { // Renamed
 	client, err := workitemtracking.NewClient(context.Background(), conn)
 	if err != nil {
-		fmt.Printf("Error creating workitemtracking client for NewAzureGetWorkItemsTool: %v\n", err)
 		return nil
 	}
 
@@ -233,10 +232,12 @@ func (tool *AzureGetWorkItemsTool) Handler(ctx context.Context, request mcp.Call
 			Project: &tool.config.Project,
 			Ids:     &parsedIDs, // Max 200 IDs for GetCommentsBatch
 		})
+
 		if err != nil {
-			// Log error but continue, comments might be missing for some.
-			fmt.Printf("Warning: Failed to get comments batch: %v\n", err)
-		} else if commentsBatchResult != nil && commentsBatchResult.Comments != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("Failed to get comments batch: %v", err)), nil
+		}
+
+		if commentsBatchResult != nil && commentsBatchResult.Comments != nil {
 			for _, comment := range *commentsBatchResult.Comments {
 				if comment.WorkItemId == nil || comment.Text == nil {
 					continue
@@ -305,7 +306,6 @@ func (tool *AzureGetWorkItemsTool) Handler(ctx context.Context, request mcp.Call
 				}
 				relatedID, relErr := ExtractWorkItemIDFromURL(*relation.Url)
 				if relErr != nil {
-					fmt.Printf("Warning: Failed to parse related work item ID from URL '%s': %v\n", *relation.Url, relErr)
 					continue
 				}
 				switch *relation.Rel {

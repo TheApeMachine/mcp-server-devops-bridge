@@ -39,13 +39,11 @@ type SprintWorkItemOutput struct {
 func NewAzureSprintItemsTool(conn *azuredevops.Connection, config AzureDevOpsConfig) core.Tool {
 	tClient, err := workitemtracking.NewClient(context.Background(), conn)
 	if err != nil {
-		fmt.Printf("Error creating workitemtracking client for AzureSprintItemsTool: %v\n", err)
 		return nil
 	}
 
 	wClient, err := work.NewClient(context.Background(), conn)
 	if err != nil {
-		fmt.Printf("Error creating work client for AzureSprintItemsTool: %v\n", err)
 		return nil
 	}
 

@@ -35,7 +35,6 @@ type AzureGetSprintsTool struct {
 func NewAzureGetSprintsTool(conn *azuredevops.Connection, config AzureDevOpsConfig) core.Tool {
 	workClient, err := work.NewClient(context.Background(), conn)
 	if err != nil {
-		fmt.Printf("Error creating work client for AzureGetSprintsTool: %v\n", err)
 		return nil
 	}
 
@@ -116,9 +115,6 @@ func (tool *AzureGetSprintsTool) Handler(ctx context.Context, request mcp.CallTo
 		currentIterations, err := tool.client.GetTeamIterations(ctx, currentArgs)
 		if err == nil && currentIterations != nil {
 			currentAndFutureIterations = append(currentAndFutureIterations, *currentIterations...)
-		} else if err != nil {
-			// Log or handle error for current timeframe fetch, but try to proceed if possible
-			fmt.Printf("Warning: Failed to get current sprints: %v\n", err)
 		}
 
 		// Fetch Future
@@ -127,9 +123,6 @@ func (tool *AzureGetSprintsTool) Handler(ctx context.Context, request mcp.CallTo
 		futureIterations, err := tool.client.GetTeamIterations(ctx, futureArgs)
 		if err == nil && futureIterations != nil {
 			currentAndFutureIterations = append(currentAndFutureIterations, *futureIterations...)
-		} else if err != nil {
-			// Log or handle error for future timeframe fetch
-			fmt.Printf("Warning: Failed to get future sprints: %v\n", err)
 		}
 
 		// Deduplicate, as current might overlap if API behaves unexpectedly, though usually distinct

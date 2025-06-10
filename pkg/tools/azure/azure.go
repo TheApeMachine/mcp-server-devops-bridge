@@ -1,13 +1,11 @@
 package azure
 
 import (
-	"log"
 	"os"
 
 	"github.com/microsoft/azure-devops-go-api/azuredevops/v7"
 	"github.com/theapemachine/mcp-server-devops-bridge/core"
 	"github.com/theapemachine/mcp-server-devops-bridge/pkg/tools/azure/tools"
-	"github.com/theapemachine/mcp-server-devops-bridge/pkg/tools/slack"
 )
 
 type AzureDevOpsConfig struct {
@@ -30,8 +28,6 @@ func NewAzureProvider() *AzureProvider {
 	team := os.Getenv("AZURE_DEVOPS_TEAM")
 
 	if orgName == "" || pat == "" || project == "" || team == "" {
-		log.Println("Warning: Azure DevOps environment variables not set correctly")
-		log.Println("Required: AZURE_DEVOPS_ORG, AZDO_PAT, AZURE_DEVOPS_PROJECT, AZURE_DEVOPS_TEAM")
 		return &AzureProvider{
 			Tools: make(map[string]core.Tool),
 		}
@@ -86,16 +82,6 @@ func NewAzureProvider() *AzureProvider {
 	wikiTool := NewWikiTool(conn, config)
 	if wikiTool != nil {
 		provider.Tools["wiki"] = wikiTool
-	} else {
-		log.Println("Warning: Failed to initialize Wiki tool")
-	}
-
-	// Register Slack tool
-	slackTool := slack.NewSlackPostMessageTool()
-	if slackTool != nil {
-		provider.registerTool(slackTool)
-	} else {
-		log.Println("Warning: Failed to initialize Slack tool, SLACK_WEBHOOK_URL might not be set.")
 	}
 
 	return provider
@@ -109,7 +95,6 @@ func (provider *AzureProvider) registerTool(tool core.Tool) {
 
 	toolName := tool.Handle().Name
 	provider.Tools[toolName] = tool
-	log.Printf("Registered Azure DevOps tool: %s", toolName)
 }
 
 func stringPtr(s string) *string {

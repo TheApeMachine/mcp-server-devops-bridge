@@ -24,7 +24,6 @@ type AzureCreateSprintTool struct {
 func NewAzureCreateSprintTool(conn *azuredevops.Connection, config AzureDevOpsConfig) core.Tool {
 	workClient, err := work.NewClient(context.Background(), conn)
 	if err != nil {
-		fmt.Printf("Error creating work client for AzureCreateSprintTool: %v\n", err)
 		return nil
 	}
 

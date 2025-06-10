@@ -40,7 +40,6 @@ type WorkItemDefinition struct {
 func NewAzureCreateWorkItemsTool(conn *azuredevops.Connection, config AzureDevOpsConfig) core.Tool {
 	client, err := workitemtracking.NewClient(context.Background(), conn)
 	if err != nil {
-		fmt.Printf("Error creating workitemtracking client for AzureCreateWorkItemsTool: %v\n", err)
 		return nil
 	}
 

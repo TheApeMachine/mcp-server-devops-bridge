@@ -47,7 +47,6 @@ type RelationLinkArgs struct {
 func NewAzureUpdateWorkItemsTool(conn *azuredevops.Connection, config AzureDevOpsConfig) core.Tool {
 	client, err := workitemtracking.NewClient(context.Background(), conn)
 	if err != nil {
-		fmt.Printf("Error creating workitemtracking client for AzureUpdateWorkItemsTool: %v\n", err)
 		return nil
 	}
 

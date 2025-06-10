@@ -33,7 +33,6 @@ type AzureSearchWorkItemsTool struct {
 func NewAzureSearchWorkItemsTool(conn *azuredevops.Connection, config AzureDevOpsConfig) core.Tool {
 	client, err := workitemtracking.NewClient(context.Background(), conn)
 	if err != nil {
-		fmt.Printf("Error creating workitemtracking client for AzureSearchWorkItemsTool: %v\n", err)
 		return nil
 	}
 

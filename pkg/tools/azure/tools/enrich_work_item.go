@@ -120,7 +120,6 @@ func (tool *AzureEnrichWorkItemTool) Handler(ctx context.Context, request mcp.Ca
 	}
 
 	// Step 1.1: GitHub Issues/PRs Search
-	// fmt.Println("Searching GitHub Issues/PRs...")
 	if appCfg.GitHub.PersonalAccessToken == "" || ghOrg == "" {
 		return mcp.NewToolResultError("GitHub PAT or Organization not configured/provided, skipping GitHub Issues/PRs search."), nil
 	} else {
@@ -128,8 +127,7 @@ func (tool *AzureEnrichWorkItemTool) Handler(ctx context.Context, request mcp.Ca
 		tc := oauth2.NewClient(ctx, ts)
 		ghClient := github.NewClient(tc)
 
-		// -- TEMP: Hardcoded repos for testing --
-		targetGhRepos := []string{"FanApp-Legacy", "phoneapp"}
+		targetGhRepos := appCfg.Sentry.ProjectNames
 		repoQueryParts := []string{}
 		for _, repoName := range targetGhRepos {
 			repoQueryParts = append(repoQueryParts, fmt.Sprintf("repo:%s/%s", ghOrg, repoName))
@@ -180,7 +178,6 @@ func (tool *AzureEnrichWorkItemTool) Handler(ctx context.Context, request mcp.Ca
 
 	// Step 1.2: GitHub Code Search
 	if searchGHCode {
-		// fmt.Println("Searching GitHub Code...")
 		if appCfg.GitHub.PersonalAccessToken == "" || ghOrg == "" {
 			return mcp.NewToolResultError("GitHub PAT or Organization not configured/provided, skipping GitHub Code search."), nil
 		} else {
@@ -189,7 +186,7 @@ func (tool *AzureEnrichWorkItemTool) Handler(ctx context.Context, request mcp.Ca
 			ghClient := github.NewClient(tc)
 
 			// -- TEMP: Hardcoded repos for testing (reusing from above) --
-			targetGhRepos := []string{"FanApp-Legacy", "phoneapp"} // Assuming ghOrg is defined
+			targetGhRepos := appCfg.Sentry.ProjectNames
 			repoQueryParts := []string{}
 			if ghOrg != "" { // Ensure ghOrg is available before using it
 				for _, repoName := range targetGhRepos {
@@ -239,7 +236,7 @@ func (tool *AzureEnrichWorkItemTool) Handler(ctx context.Context, request mcp.Ca
 	}
 
 	// Step 3: Sentry Search
-	for _, project := range []string{"4507328219709520", "4507171795959888"} {
+	for _, project := range appCfg.Sentry.ProjectIDs {
 		sentryAPIURL := fmt.Sprintf("https://sentry.io/api/0/organizations/%s/issues/?project=%s", appCfg.Sentry.Organization, project)
 
 		httpReq, err := http.NewRequestWithContext(ctx, "GET", sentryAPIURL, nil)

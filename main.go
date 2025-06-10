@@ -1,11 +1,11 @@
 package main
 
 import (
-	"log"
-
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/theapemachine/mcp-server-devops-bridge/core"
+	"github.com/theapemachine/mcp-server-devops-bridge/pkg/tools/agents"
 	"github.com/theapemachine/mcp-server-devops-bridge/pkg/tools/azure"
+	"github.com/theapemachine/mcp-server-devops-bridge/pkg/tools/slack"
 )
 
 // MultiTool manages all available tools
@@ -16,7 +16,6 @@ type MultiTool struct {
 
 func (mt *MultiTool) addTool(name string, tool core.Tool) {
 	if tool == nil {
-		log.Printf("Warning: Attempted to add nil tool: %s", name)
 		return
 	}
 	mt.tools[name] = tool
@@ -51,10 +50,10 @@ func main() {
 	// // Try to initialize vector store
 	// vs, err := memory.NewQdrantStore("memories")
 	// if err != nil {
-	// 	log.Printf("Warning: Could not initialize vector store: %v", err)
+	//
 	// } else {
 	// 	vectorStore = vs
-	// 	log.Println("Vector store initialized successfully")
+	//
 	// }
 
 	// // Try to initialize graph store
@@ -66,13 +65,13 @@ func main() {
 	// if neo4jUrl != "" && neo4jUser != "" && neo4jPass != "" {
 	// 	gs, err := memory.NewNeo4jStore(neo4jUrl, neo4jUser, neo4jPass, neo4jDb)
 	// 	if err != nil {
-	// 		log.Printf("Warning: Could not initialize graph store: %v", err)
+	//
 	// 	} else {
 	// 		graphStore = gs
-	// 		log.Println("Graph store initialized successfully")
+	//
 	// 	}
 	// } else {
-	// 	log.Println("Warning: Neo4j environment variables not set, graph store not initialized")
+	//
 	// }
 
 	// // Initialize memory tool with both stores
@@ -87,26 +86,34 @@ func main() {
 	// // Initialize browser tool
 	// multiTool.addTool("browser", browser.NewBrowserTool(), vectorStore, graphStore)
 
+	// Initialize Agent tools
+	agentProvider, err := agents.NewAgentProvider()
+	if err == nil && agentProvider != nil {
+		if len(agentProvider.Tools) > 0 {
+			for name, tool := range agentProvider.Tools {
+				multiTool.addTool(name, tool)
+			}
+		}
+	}
+
 	// Initialize Azure tools
 	azureProvider := azure.NewAzureProvider()
 	if len(azureProvider.Tools) > 0 {
-		log.Println("Azure DevOps tools initialized successfully")
 		for name, tool := range azureProvider.Tools {
 			multiTool.addTool(name, tool)
-			log.Printf("Added Azure DevOps tool: %s", name)
 		}
-	} else {
-		log.Println("Warning: No Azure DevOps tools were initialized. Check environment variables.")
-		log.Println("Required: AZURE_DEVOPS_ORG, AZDO_PAT, AZURE_DEVOPS_PROJECT")
 	}
 
-	// // Initialize Slack tool
-	// multiTool.addTool("slack", slack.NewSlackTool())
+	// Initialize Slack tool
+	slackTool := slack.NewSlackPostMessageTool()
+	if slackTool != nil {
+		multiTool.addTool(slackTool.Handle().Name, slackTool)
+	}
 
 	// // Start agent cleanup goroutine
 	// ai.StartAgentCleanup()
 
 	if err := server.ServeStdio(mcpServer); err != nil {
-		log.Fatalf("Server error: %v\n", err)
+		panic(err)
 	}
 }

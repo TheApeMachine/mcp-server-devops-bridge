@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 
@@ -151,9 +150,6 @@ func TestAzureSprintOverviewTool_Handler_Integration(t *testing.T) {
 					if overview.StartDate != "" {
 						So(overview.StartDate, ShouldHaveLength, 10)
 					}
-					fmt.Printf("Current Sprint Overview (JSON): %+v\n", overview)
-				} else {
-					fmt.Printf("Current Sprint Overview (JSON) - Potential tool error in content: %s\n", contentStr)
 				}
 			})
 		})
@@ -196,7 +192,6 @@ func TestAzureSprintOverviewTool_Handler_Integration(t *testing.T) {
 				So(contentStr, ShouldContainSubstring, "Iteration Path:")
 				So(contentStr, ShouldNotContainSubstring, "@currentIteration")
 				So(contentStr, ShouldContainSubstring, "Total Work Items:")
-				fmt.Printf("Current Sprint Overview (Text):\n%s\n", contentStr)
 			})
 		})
 
@@ -236,14 +231,12 @@ func TestAzureSprintOverviewTool_Handler_Integration(t *testing.T) {
 				So(ok, ShouldBeTrue)
 
 				if strings.Contains(contentStr, "Failed to") || strings.Contains(contentStr, "Could not determine sprint") {
-					fmt.Printf("Specific Sprint Overview for '%s' (Tool Error in Content): %s\n", specificSprintPath, contentStr)
 				} else {
 					So(contentStr, ShouldNotBeEmpty)
 					var overview SprintOverviewOutput
 					errUnmarshal := json.Unmarshal([]byte(contentStr), &overview)
 					So(errUnmarshal, ShouldBeNil)
 					So(overview.IterationPath, ShouldContainSubstring, specificSprintPath)
-					fmt.Printf("Specific Sprint Overview ('%s', JSON):\n%+v\n", specificSprintPath, overview)
 				}
 			})
 		})
@@ -278,10 +271,8 @@ func TestAzureSprintOverviewTool_Handler_Integration(t *testing.T) {
 				So(ok, ShouldBeTrue)
 
 				if strings.Contains(contentStr, "Failed to query work items") || strings.Contains(contentStr, "Could not determine sprint") {
-					fmt.Printf("Non-existent Sprint Overview Response (Error in Content: %s)\n", contentStr)
 					So(contentStr, ShouldContainSubstring, "Failed to")
 				} else {
-					fmt.Printf("Non-existent Sprint Overview Response (NoError in Content, Output: %s)\n", contentStr)
 					So(contentStr, ShouldContainSubstring, "Total Work Items: 0")
 					So(contentStr, ShouldContainSubstring, nonExistentSprint)
 				}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -25,16 +24,11 @@ func NewSlackPostMessageTool() core.Tool {
 	defaultChannelID := os.Getenv("SLACK_DEFAULT_CHANNEL_ID")
 
 	if botToken == "" {
-		log.Println("Warning: SLACK_BOT_TOKEN environment variable not set. Slack tool will not be functional.")
 		return nil
-	}
-	if defaultChannelID == "" {
-		log.Println("Warning: SLACK_DEFAULT_CHANNEL_ID environment variable not set. Slack tool will use first available channel or require channel_id input.")
-		// We can allow it to proceed and require channel_id in Run, or make it mandatory here.
-		// For now, let's allow it but log a clear warning.
 	}
 
 	api := slack.New(botToken)
+
 	t := &SlackPostMessageTool{
 		client:           api,
 		defaultChannelID: defaultChannelID,
@@ -83,11 +77,9 @@ func (t *SlackPostMessageTool) Handler(ctx context.Context, request mcp.CallTool
 	)
 
 	if err != nil {
-		log.Printf("Error sending Slack message: %v", err)
 		return mcp.NewToolResultError(fmt.Sprintf("slack_api_error: failed to send message to Slack channel %s: %v", channelID, err)), nil
 	}
 
-	log.Printf("Message successfully posted to Slack channel %s at %s: %s", postedChannelID, timestamp, message)
 	responseData := map[string]interface{}{
 		"status":       "success",
 		"channel_id":   postedChannelID,
@@ -95,9 +87,10 @@ func (t *SlackPostMessageTool) Handler(ctx context.Context, request mcp.CallTool
 		"message_sent": message,
 	}
 	jsonResponse, err := json.Marshal(responseData)
+
 	if err != nil {
-		log.Printf("Error marshalling response to JSON: %v", err)
 		return mcp.NewToolResultError("internal_error: failed to create JSON response"), nil
 	}
+
 	return mcp.NewToolResultText(string(jsonResponse)), nil
 }

@@ -43,12 +43,10 @@ type AzureSprintOverviewTool struct {
 func NewAzureSprintOverviewTool(conn *azuredevops.Connection, config AzureDevOpsConfig) core.Tool {
 	wClient, err := work.NewClient(context.Background(), conn)
 	if err != nil {
-		fmt.Printf("Error creating work client for AzureSprintOverviewTool: %v\n", err)
 		return nil
 	}
 	tClient, err := workitemtracking.NewClient(context.Background(), conn)
 	if err != nil {
-		fmt.Printf("Error creating workitemtracking client for AzureSprintOverviewTool: %v\n", err)
 		return nil
 	}
 
@@ -215,7 +213,6 @@ func (tool *AzureSprintOverviewTool) Handler(ctx context.Context, request mcp.Ca
 			// The method is GetWorkItems, not GetWorkItemsBatch
 			batchResult, err := tool.trackingClient.GetWorkItems(ctx, args)
 			if err != nil {
-				fmt.Printf("Warning: Failed to get batch details for some work items: %v\n", err)
 				continue
 			}
 
